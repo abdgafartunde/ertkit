@@ -188,7 +188,12 @@ $\chi^2 = N_d$.
 
 - **Few-layer inversion.** The unknowns are $m = (\ln \rho_i, \ln h_i)$,
   with $p = 2N - 1$ parameters plus any static-shift factors. Minimize
-  $\chi^2$ by Levenberg–Marquardt from several starting models. The Jacobian
+  $\chi^2$ with a Levenberg–Marquardt-type trust-region method
+  (`scipy.optimize.least_squares`) from several starting models, within search
+  bounds beyond which the data cannot resolve a parameter (resistivities within
+  a factor of 1000 of the observed range, thicknesses between 1/1000 of the
+  smallest and 10 times the largest $AB/2$); parameters that end at a bound are
+  reported as unresolved. The Jacobian
   is computed by complex-step differentiation of the recurrence and the
   filter, which is accurate to round-off. Report the linearized covariance
   $(J^T W^2 J)^{-1}$, where $W = \mathrm{diag}(1/s_i)$; the standard deviation
@@ -552,9 +557,10 @@ doi = ert.doi_index(result)  # reuses the result's settings
   Google Colab runtime that can still be selected, so that ertkit installs in
   teaching notebooks without upgrading preinstalled packages. They are
   reviewed at each release and tested by the oldest-dependencies job. As of
-  October 2026: Python ≥ 3.12, numpy ≥ 2.0, scipy ≥ 1.15, matplotlib ≥ 3.10.
+  October 2026: Python ≥ 3.12, numpy ≥ 2.0, scipy ≥ 1.16, matplotlib ≥ 3.10.
   Python and numpy are below SPEC 0 on purpose: Colab currently runs Python
-  3.13 with numpy 2.1.
+  3.13 with numpy 2.1 and scipy 1.16. scipy is above SPEC 0 (1.15) because the
+  macOS wheels of scipy 1.15 fail to load on macOS 26 and later.
 - `uv.lock` is committed; the quality, docs and test jobs install with
   `uv sync --locked`; Dependabot updates the lock file and the workflow
   actions monthly, so CI meets new numpy and scipy versions before users do.

@@ -13,9 +13,10 @@ authors = [{ name = "Abd'gafar Tunde Tiamiyu" }]
 requires-python = ">=3.12"
 # Minimum versions are deliberately below SPEC 0 so that ertkit installs in
 # Google Colab without upgrading preinstalled packages (docs/dev/design.md 6.1).
+# scipy needs 1.16: the macOS wheels of 1.15.x fail to load on macOS 26 and later.
 dependencies = [
     "numpy>=2.0",
-    "scipy>=1.15",
+    "scipy>=1.16",
     "libdlf>=0.3",
 ]
 keywords = [
