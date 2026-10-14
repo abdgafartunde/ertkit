@@ -1,29 +1,81 @@
-# Groundwater Detection
+# ertkit
 
-Electrical Resistivity Tomography (ERT) inversion for groundwater mapping.
+[![CI](https://github.com/abdgafartunde/ertkit/actions/workflows/ci.yml/badge.svg)](https://github.com/abdgafartunde/ertkit/actions/workflows/ci.yml)
+[![Docs](https://github.com/abdgafartunde/ertkit/actions/workflows/docs.yml/badge.svg)](https://abdgafartunde.github.io/ertkit/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Status:** Under development ⸺ expected Q2 2027.
+**Resistivity imaging for groundwater exploration, with an honest account of
+what the data can resolve.**
 
-## Planned
+ertkit is a Python package, in early development, for inverting vertical
+electrical sounding (VES) and 2.5-D electrical resistivity tomography (ERT)
+data. Each result is designed to come with what is needed to judge it:
 
-- 2-D ERT forward modelling with P1 finite elements
-- Classical regularised inversion (Tikhonov, TV) for resistivity imaging
-- Depth-of-investigation analysis and sensitivity maps
-- Synthetic aquifer models with conductive/resistive anomalies
+- a data error model, and a fit to the noise level rather than to every digit
+  of the data;
+- sensitivity and depth of investigation, so that unresolved parts of a model
+  are marked as such;
+- parameter uncertainty and, for VES, the range of equivalent models that fit
+  the data equally well.
 
-## Motivation
+## Why another resistivity code?
 
-Electrical Resistivity Tomography is a geophysical imaging technique closely
-related to EIT, used to map subsurface resistivity distributions for groundwater
-exploration, contaminant monitoring, and geotechnical site characterisation.
-While `eitkit` targets medical/industrial EIT on the unit disc, this project
-extends the same mathematical framework to half-space ERT geometries with
-surface electrode arrays and larger spatial scales.
+Boreholes are often sited from resistivity models whose reliability was never
+quantified. Open tools such as [pyGIMLi](https://www.pygimli.org),
+[SimPEG](https://simpeg.xyz) and [ResIPy](https://gitlab.com/hkex/resipy)
+already provide excellent modeling and inversion. ertkit focuses on three
+things: making reliability the default output, publishing a verification
+report with every release, and keeping the code small enough to teach from.
+The [design document](docs/dev/design.md) gives the full statement of need,
+the mathematics and the verification plan.
 
-## References
+## Status
 
-- Loke, M.H. & Barker, R.D. (1996). Rapid least-squares inversion of apparent
-  resistivity pseudosections by a quasi-Newton method. *Geophysical
-  Prospecting*, 44(1), 131--152.
-- Daily, W. et al. (2004). Electrical resistance tomography. *The Leading
-  Edge*, 23(5), 438--442.
+ertkit is in its foundation stage: the repository, tests, documentation and
+release pipeline are being set up, and there is no science code yet. Planned
+releases:
+
+| Release | Content |
+|---|---|
+| 0.1 | VES: layered-earth forward model, few-layer and smooth inversion, linearized uncertainty, sensitivity and depth of investigation |
+| 0.2 | VES equivalence analysis |
+| 0.3 | 2.5-D ERT forward modeling |
+| 0.4 | ERT inversion with an error model and cumulative sensitivity |
+| 0.5 | ERT depth of investigation and uncertainty maps |
+| 0.6 | Field data formats and an end-to-end field example |
+| 1.0 | Stable public API |
+
+## Installation
+
+ertkit is not yet on PyPI; release 0.1 will be installable with
+`pip install ertkit`. To work on the code, install [uv](https://docs.astral.sh/uv/)
+and run:
+
+```bash
+git clone https://github.com/abdgafartunde/ertkit.git
+cd ertkit
+uv sync
+uv run pytest
+```
+
+## Documentation
+
+The documentation is at <https://abdgafartunde.github.io/ertkit/>. Theory,
+examples, the verification report and the API reference are added there with
+each release.
+
+## Contributing
+
+Bug reports, questions and suggestions are welcome on the
+[issue tracker](https://github.com/abdgafartunde/ertkit/issues). See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Citing
+
+A Zenodo DOI will be issued with release 0.1. Citation metadata is in
+[CITATION.cff](CITATION.cff).
+
+## License
+
+MIT; see [LICENSE](LICENSE).

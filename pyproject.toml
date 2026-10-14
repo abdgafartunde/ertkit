@@ -1,0 +1,153 @@
+[build-system]
+requires = ["hatchling>=1.27", "hatch-vcs>=0.5"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ertkit"
+dynamic = ["version"]
+description = "Verified VES and 2.5-D ERT inversion for groundwater exploration, with depth of investigation and uncertainty."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Abd'gafar Tunde Tiamiyu" }]
+requires-python = ">=3.12"
+# Minimum versions are deliberately below SPEC 0 so that ertkit installs in
+# Google Colab without upgrading preinstalled packages (docs/dev/design.md 6.1).
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.15",
+    "libdlf>=0.3",
+]
+keywords = [
+    "electrical resistivity tomography",
+    "vertical electrical sounding",
+    "geophysics",
+    "groundwater",
+    "inverse problems",
+    "uncertainty quantification",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.10"]
+
+[project.urls]
+Documentation = "https://abdgafartunde.github.io/ertkit/"
+Source = "https://github.com/abdgafartunde/ertkit"
+Issues = "https://github.com/abdgafartunde/ertkit/issues"
+Changelog = "https://github.com/abdgafartunde/ertkit/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+test = [
+    "pytest>=8.4",
+    "pytest-cov>=6.0",
+    "hypothesis>=6.130",
+]
+docs = [
+    "sphinx>=8.2",
+    "pydata-sphinx-theme>=0.16",
+    "numpydoc>=1.9",
+    "sphinx-gallery>=0.19",
+    "myst-parser>=4.0",
+    "matplotlib>=3.10",
+]
+lint = [
+    "mypy>=2.0",
+    "scipy-stubs",
+    "pre-commit>=4.0",
+    "ruff>=0.17",
+]
+dev = [
+    { include-group = "test" },
+    { include-group = "docs" },
+    { include-group = "lint" },
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.hatch.version]
+source = "vcs"
+raw-options = { local_scheme = "no-local-version" }
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/ertkit/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ertkit"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/.github", "/docs/_build", "/docs/auto_examples", "/docs/generated"]
+
+[tool.ruff]
+line-length = 88
+extend-exclude = ["src/ertkit/_version.py", "docs/auto_examples"]
+
+[tool.ruff.lint]
+extend-select = [
+    "B",    # flake8-bugbear
+    "I",    # isort
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "NPY",  # numpy-specific rules
+    "PT",   # flake8-pytest-style
+    "RUF",  # ruff-specific rules
+    "C4",   # flake8-comprehensions
+    "PTH",  # use pathlib
+    "G",    # logging format
+    "T20",  # no print
+]
+
+[tool.ruff.lint.per-file-ignores]
+"examples/*" = ["T20"]
+"docs/conf.py" = ["T20"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+files = ["src"]
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+
+[[tool.mypy.overrides]]
+module = ["libdlf", "libdlf.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.4"
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
+xfail_strict = true
+log_level = "INFO"
+filterwarnings = ["error"]
+markers = [
+    "slow: long-running tests, excluded from the oldest-dependencies job",
+    "verification: checks that feed the verification report",
+    "crosscheck: comparisons with pyGIMLi and SimPEG (weekly job only)",
+]
+
+[tool.codespell]
+skip = "uv.lock,*.svg"
+
+[tool.coverage.run]
+source = ["ertkit"]
+branch = true
+omit = ["*/_version.py", "*/plot/*"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]

@@ -1,0 +1,18 @@
+name: Feature request
+description: Suggest a new capability or an improvement.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you need?
+      description: Describe the problem or the analysis you want to do.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How might ertkit support this? Include references to methods if relevant.
+    validations:
+      required: false

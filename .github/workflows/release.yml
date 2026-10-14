@@ -1,0 +1,94 @@
+name: Release
+
+# A manual run uploads a development version to TestPyPI (a rehearsal).
+# A published GitHub release uploads to PyPI. Both use trusted publishing,
+# so no API tokens are stored.
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Check that the tag matches CITATION.cff and CHANGELOG.md
+        if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python3 - <<'EOF'
+          import os, re, sys
+          tag = os.environ["TAG"]
+          if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+              sys.exit(f"Tag {tag!r} is not of the form vX.Y.Z")
+          version = tag[1:]
+          cff = open("CITATION.cff", encoding="utf-8").read()
+          cff_version = re.search(r"^version:\s*\"?([^\"\s]+)", cff, re.M)
+          if not cff_version or cff_version.group(1) != version:
+              sys.exit(f"CITATION.cff version does not match {version}")
+          log = open("CHANGELOG.md", encoding="utf-8").read()
+          released = re.findall(r"^## \[(\d+\.\d+\.\d+)\]", log, re.M)
+          if not released or released[0] != version:
+              sys.exit(f"The newest CHANGELOG.md release is not {version}")
+          print(f"Tag, CITATION.cff and CHANGELOG.md agree on {version}")
+          EOF
+      - name: Build
+        run: uv build
+      - name: Check
+        run: |
+          uvx twine check --strict dist/*
+          uvx check-wheel-contents dist/*.whl
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    name: Upload to TestPyPI
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/ertkit
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    name: Upload to PyPI
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/ertkit
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2

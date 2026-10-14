@@ -511,22 +511,26 @@ import ertkit as ek
 from ertkit import ert, ves
 
 # VES (0.1 and 0.2)
-survey = ves.Survey.schlumberger(ab2=np.geomspace(2.5, 150.0, 22), mn2=0.5)  # mn2 scalar or per reading
+survey = ves.Survey.schlumberger(
+    ab2=np.geomspace(2.5, 150.0, 22), mn2=0.5
+)  # mn2 scalar or per reading
 truth = ves.LayeredModel(resistivity=[150.0, 30.0, 800.0], thickness=[2.0, 15.0])
-rhoa = ves.forward(truth, survey)                          # noise-free array, ohm m
-noise = ek.ErrorModel(relative=0.03, absolute=1e-4)        # b and a of section 3.2; a in ohm
+rhoa = ves.forward(truth, survey)  # noise-free array, ohm m
+noise = ek.ErrorModel(relative=0.03, absolute=1e-4)  # b and a of section 3.2; a in ohm
 data = ves.Sounding.synthetic(truth, survey, noise, rng=1)  # or ves.read_csv(path)
-fit = ves.invert_few_layer(data, n_layers=3, rng=0)        # LayerFit: .std_log, .factor, .correlation, .depths
-smooth = ves.invert_smooth(data)                           # SmoothFit: .sensitivity, .doi_depth
+fit = ves.invert_few_layer(
+    data, n_layers=3, rng=0
+)  # LayerFit: .std_log, .factor, .correlation, .depths
+smooth = ves.invert_smooth(data)  # SmoothFit: .sensitivity, .doi_depth
 ens = ves.sample_equivalence(data, fit, bounds=..., n_chains=4, n_samples=5_000, rng=0)
 
 # ERT (0.3 to 0.5; provisional)
 survey = ert.Survey.dipole_dipole(n_electrodes=48, spacing=2.0, max_n=6)
-truth = ek.benchmarks.weathered_basement()                 # geometric, independent of any mesh
+truth = ek.benchmarks.weathered_basement()  # geometric, independent of any mesh
 fine = ert.Mesh.for_survey(survey, refine=2)
 data = ert.Dataset.synthetic(truth, survey, noise, mesh=fine, rng=1)
 result = ert.invert(data, mesh=ert.Mesh.for_survey(survey))
-doi = ert.doi_index(result)                                # reuses the result's settings
+doi = ert.doi_index(result)  # reuses the result's settings
 ```
 
 ## 6. Engineering standards
@@ -580,6 +584,10 @@ doi = ert.doi_index(result)                                # reuses the result's
 - **Workflow hygiene:** `permissions: contents: read` by default, `concurrency`
   with cancel-in-progress, `timeout-minutes` on every job, and
   `MPLBACKEND=Agg` and `PYTHONWARNDEFAULTENCODING=1` in the environment.
+  Actions are pinned to commit hashes (Dependabot updates them, after a
+  seven-day cooldown), checkouts do not keep credentials, the deploying
+  workflow uses no dependency cache, and zizmor audits the workflows in
+  pre-commit.
 - New Python versions join CI when numpy and scipy publish wheels for them
   (usually at the first release candidate).
 

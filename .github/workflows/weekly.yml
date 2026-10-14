@@ -1,0 +1,31 @@
+name: Weekly
+
+# Checks that are useful but must not block pull requests. The cross-check
+# against pyGIMLi and SimPEG joins this workflow with release 0.1.
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linkcheck:
+    name: Link check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --locked --no-default-groups --group docs
+      - name: Check links
+        run: uv run --no-sync sphinx-build -b linkcheck docs docs/_build/linkcheck

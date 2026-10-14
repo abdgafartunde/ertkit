@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://abdgafartunde.github.io/ertkit/
+    about: Installation, theory, examples and the API reference.

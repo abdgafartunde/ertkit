@@ -1,0 +1,27 @@
+name: Bug report
+description: Something does not work, or gives a wrong result.
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce it
+      description: A short script that shows the problem, ideally with synthetic data.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions
+      description: Paste the output of `import ertkit; ertkit.show_versions()`.
+      render: text
+    validations:
+      required: true
