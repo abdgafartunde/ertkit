@@ -46,7 +46,7 @@ sphinx_gallery_conf = {
 }
 
 html_theme = "pydata_sphinx_theme"
-html_title = "ertkit"
+html_title = "ertkit documentation"
 html_theme_options = {
     "github_url": "https://github.com/abdgafartunde/ertkit",
     "navigation_with_keys": False,

@@ -31,6 +31,7 @@ jobs:
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
+          cache-suffix: lint
       - name: Install
         run: uv sync --locked --no-default-groups --group lint
       - name: pre-commit
