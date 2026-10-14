@@ -121,15 +121,19 @@ The result, a {class}`~ertkit.ves.SmoothFit`, includes:
 
 - **Sensitivity.** For each layer, how strongly the data respond to its
   resistivity, weighted by the data errors.
-- **Depth of investigation.** Two further inversions pull the model towards
-  very different reference resistivities, 0.1 and 10 times the mean apparent
-  resistivity. Where the data control the model the two agree; where they do
-  not, each follows its reference. The index
-  $R = (m^{(1)} - m^{(2)})/(m^{(1)}_{\mathrm{ref}} - m^{(2)}_{\mathrm{ref}})$
+- **Depth of investigation.** Two further inversions pull the model toward
+  very different reference resistivities, 0.1 and 10 times the geometric mean
+  of the apparent resistivities. Where the data control the model the two
+  agree; where they do not, each follows its reference. The index
+  $R^{\mathrm{DOI}} = (m^{(1)} - m^{(2)})/(m_{\mathrm{ref}}^{(1)} - m_{\mathrm{ref}}^{(2)})$
   (Oldenburg and Li 1999; Marescot et al. 2003) is rescaled to 1 at the
-  bottom, and the depth of investigation is the depth below which its
-  magnitude stays above 0.1. Below it, the model reflects the regularization,
-  not the data, and plots shade that region.
+  bottom. The depth of investigation is the shallowest depth from which the
+  magnitude of the index stays at or above 0.1 (`ertkit.ves.DOI_THRESHOLD`)
+  over at least a factor of 1.5 in depth; below it, the model reflects the
+  regularization, not the data. Plots shade that region, and also any single
+  shallower layer whose index reaches 0.1. If the two reference
+  inversions still agree at the bottom of the model, ertkit warns and reports
+  no depth of investigation; a larger `depth_range` then helps.
 
 ## Limitations
 

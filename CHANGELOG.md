@@ -31,12 +31,18 @@ project uses [semantic versioning](https://semver.org/).
   (standard deviations, multiplicative factors, correlations, depths with
   standard deviations), a goodness-of-fit p-value, optional static-shift
   factors per MN segment, and warnings for poor fits and unresolved
-  parameters. Results are `ves.LayerFit` objects.
+  parameters. The fit with the smallest misfit over all starts is kept, and
+  the linearized covariance comes from the singular values of the weighted
+  Jacobian, so undetermined parameters get infinite uncertainty. Results are
+  `ves.LayerFit` objects, with read-only arrays.
 - Smooth (Occam) VES inversion, `ves.invert_smooth`: many layers with
   logarithmically growing thicknesses, the target misfit chi2 = N_d with the
   largest regularization weight that reaches it, the error-weighted
   sensitivity of each layer, and the Oldenburg and Li depth of investigation
-  from two reference-model inversions. Results are `ves.SmoothFit` objects.
+  from two reference-model inversions (the shallowest depth from which the
+  index stays at or above `ves.DOI_THRESHOLD` over a factor of 1.5 in depth). When the target misfit cannot be
+  reached, the best model is returned with a warning. Results are
+  `ves.SmoothFit` objects.
 - Plotting with matplotlib (`ertkit.plot.sounding`, `ertkit.plot.layered_model`;
   install with `pip install "ertkit[plot]"`).
 - Documentation: a user guide for VES, five worked examples (few-layer

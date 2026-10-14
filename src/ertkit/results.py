@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 import numpy as np
 from numpy.typing import NDArray
@@ -13,6 +13,8 @@ __all__ = ["InversionResult"]
 @dataclass(frozen=True, eq=False, kw_only=True, slots=True)
 class InversionResult:
     r"""Common part of every inversion result.
+
+    Results are immutable: their arrays are read-only.
 
     Attributes
     ----------
@@ -42,6 +44,12 @@ class InversionResult:
     converged: bool
     stop_reason: str
     n_iterations: int
+
+    def __post_init__(self) -> None:
+        for f in fields(self):
+            value = getattr(self, f.name)
+            if isinstance(value, np.ndarray):
+                value.setflags(write=False)
 
     @property
     def chi2_ratio(self) -> float:

@@ -9,7 +9,14 @@ from hypothesis import given
 from hypothesis import strategies as st
 from verification_report import Verification
 
-from ertkit.ves import LayeredModel, Survey, forward, hankel_j0, potential
+from ertkit.ves import (
+    LayeredModel,
+    Survey,
+    forward,
+    hankel_j0,
+    potential,
+    resistivity_transform,
+)
 from ertkit.ves.forward import _rhoa, _tanh
 
 CONTRASTS = [1e-3, 1e-2, 1e-1, 1e1, 1e2, 1e3]  # rho2 / rho1, capped at 1000
@@ -93,23 +100,31 @@ def test_two_layer_schlumberger_against_image_series(
 
 @pytest.mark.verification
 def test_limits_at_small_and_large_spacing(verification: Verification) -> None:
-    model = LayeredModel(resistivity=[100.0, 50.0, 200.0], thickness=[2.0, 10.0])
-    depth = float(model.depths[-1])
-    survey = Survey.schlumberger(
-        ab2=[0.01 * 2.0, 1000.0 * depth], mn2=[0.002, 0.1 * depth]
-    )
-    rhoa = forward(model, survey)
+    # Design 3.5, item 3: at the end spacings, the deviation of rho_a from its
+    # limit (rho_1 or rho_2) must match the image series. Both contrast signs.
+    h, rho1 = 5.0, 100.0
+    ab2 = np.array([h / 100, 1e3 * h, 1e4 * h])
+    survey = Survey.schlumberger(ab2=ab2, mn2=ab2 / 20)
+    worst = 0.0
+    for rho2 in (10.0, 1000.0):
+        model = LayeredModel(resistivity=[rho1, rho2], thickness=[h])
+        exact = (
+            survey.geometric_factor
+            * 2.0
+            * (
+                two_layer_potential(ab2 - survey.mn2, rho1, rho2, h)
+                - two_layer_potential(ab2 + survey.mn2, rho1, rho2, h)
+            )
+        )
+        limit = np.array([rho1, rho2, rho2])
+        ratio = np.abs((forward(model, survey) - exact) / (exact - limit))
+        worst = max(worst, float(ratio.max()))
     verification.check(
-        "relative deviation from rho_1 at AB/2 = h_1/100",
-        abs(rhoa[0] / 100.0 - 1),
-        1e-6,
-        "the deviation decays faster than linearly as AB/2 shrinks; it is about 1e-7 here",
-    )
-    verification.check(
-        "relative deviation from rho_N at AB/2 = 1000 times the depth to the half-space",
-        abs(rhoa[1] / 200.0 - 1),
-        1e-4,
-        "the deviation decays like (depth / AB2)^2, about 1e-5 at this spacing",
+        "two-layer limits: largest error in the deviation of rho_a from its limit, "
+        "relative to that deviation (AB/2 = h/100, 1000 h and 10000 h)",
+        worst,
+        1e-3,
+        "the deviation itself must be right to 0.1%, not only small",
     )
 
 
@@ -156,6 +171,16 @@ def test_complex_tanh_is_finite_for_large_arguments() -> None:
     np.testing.assert_allclose(
         t.imag / 1e-30, 1 / np.cosh(np.minimum(z.real, 350)) ** 2, atol=1e-15
     )
+
+
+def test_transform_checks_thicknesses() -> None:
+    with pytest.raises(ValueError, match="need 1 thicknesses"):
+        resistivity_transform(np.ones(3), [10.0, 20.0], [1.0, 2.0])
+
+
+def test_hankel_rejects_non_positive_distances() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        hankel_j0(lambda lam: np.exp(-lam), [1.0, 0.0])
 
 
 def test_potential_rejects_bad_distances() -> None:

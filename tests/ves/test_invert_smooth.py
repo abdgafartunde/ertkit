@@ -11,6 +11,7 @@ from ertkit._linalg import matmul
 from ertkit.ves import LayeredModel, Sounding, Survey, forward
 from ertkit.ves.smooth import (
     DOI_THRESHOLD,
+    TARGET_UNREACHABLE,
     SmoothFit,
     _layer_thicknesses,
     _Occam,
@@ -82,19 +83,33 @@ def test_smooth_model_follows_the_layers(fit: SmoothFit) -> None:
 def test_depth_of_investigation_index(
     verification: Verification, fit: SmoothFit
 ) -> None:
+    tops = np.concatenate([[0.0], fit.model.depths])
     verification.check(
-        "DOI index: largest rescaled |R| in the top five layers",
-        float(np.max(fit.doi_index[:5])),
+        "DOI: largest rescaled index of the layers above the depth of investigation",
+        float(np.max(fit.doi_index[tops < fit.doi])),
         DOI_THRESHOLD,
-        "the shallowest layers are controlled by the data (Oldenburg and Li 1999)",
+        "every layer above the depth of investigation must be controlled by the data "
+        "(Oldenburg and Li 1999)",
     )
     verification.check(
-        "DOI index: 1 - rescaled |R| in the bottom layer",
-        1.0 - float(fit.doi_index[-1]),
+        "DOI: 1 - rescaled index of the second deepest layer",
+        1.0 - float(fit.doi_index[-2]),
         0.1,
-        "the bottom layer is controlled by the reference model",
+        "the deepest layers are controlled by the reference models (the bottom layer "
+        "is 1 by construction, so the next one is checked)",
     )
-    assert 0.0 < fit.doi < 3.0 * 300.0
+    assert 0.0 < fit.doi < 300.0
+
+
+def test_isolated_shallow_exceedance_does_not_set_the_depth() -> None:
+    # With this survey one shallow layer's index fluctuates just above the
+    # threshold near 1.6 m; the depth of investigation is where resolution is
+    # lost, about 19 m, not at that fluctuation.
+    survey = Survey.schlumberger(ab2=np.geomspace(2.5, 50.0, 24), mn2=0.5)
+    result = invert_smooth(Sounding.synthetic(BASEMENT, survey, NOISE, rng=4))
+    tops = np.concatenate([[0.0], result.model.depths])
+    assert np.any((result.doi_index >= DOI_THRESHOLD) & (tops < 5.0))
+    assert 10.0 < result.doi < 50.0
 
 
 def test_depth_of_investigation_grows_with_spread_length() -> None:
@@ -148,6 +163,46 @@ def test_depth_of_investigation_is_zero_when_nothing_is_resolved() -> None:
     assert np.min(result.doi_index) > DOI_THRESHOLD
 
 
+def test_unreachable_target_returns_the_minimized_misfit() -> None:
+    # 10% noise reported as 1%: chi2 = N_d cannot be reached.
+    survey = Survey.schlumberger(ab2=np.geomspace(1.0, 300.0, 24), mn2=0.5)
+    eps = np.random.default_rng(0).standard_normal(24)
+    rhoa = forward(BASEMENT, survey) * np.exp(0.10 * eps)
+    data = Sounding(survey=survey, rhoa=rhoa, error=ErrorModel(relative=0.01))
+    with pytest.warns(DataWarning, match="underestimated"):
+        result = invert_smooth(data, depth_of_investigation=False)
+    assert result.converged
+    assert result.stop_reason == TARGET_UNREACHABLE
+    start = _Occam(data, result.model.thickness, 0.0, 0.0)
+    uniform = np.full(result.model.n_layers, float(np.mean(data.log_data)))
+    assert result.chi2 < start.chi2(uniform)
+
+
+@pytest.mark.filterwarnings(
+    "ignore:the target misfit cannot be reached:ertkit.DataWarning"
+)
+def test_extreme_data_do_not_overflow() -> None:
+    # A contrast of 1e4 with 20% noise reported as 0.5%, on 80 layers: before
+    # the fix the model overflowed to nan.
+    survey = Survey.schlumberger(ab2=np.geomspace(1.0, 300.0, 24), mn2=0.5)
+    eps = np.random.default_rng(0).standard_normal(24)
+    model = LayeredModel(resistivity=[1e4, 1.0], thickness=[5.0])
+    rhoa = forward(model, survey) * np.exp(0.2 * eps)
+    data = Sounding(survey=survey, rhoa=rhoa, error=ErrorModel(relative=0.005))
+    result = invert_smooth(data, n_layers=80, depth_of_investigation=False)
+    assert np.isfinite(result.chi2)
+    assert np.all(np.isfinite(result.model.resistivity))
+
+
+def test_occam_jacobian_rows_sum_to_one() -> None:
+    # rho_a is homogeneous of degree one in the layer resistivities, so the
+    # derivatives of ln rho_a with respect to every ln rho_j sum to 1.
+    data = _data(300.0)
+    problem = _Occam(data, _layer_thicknesses(data, 30, None), 0.0, 0.0)
+    m = np.log(np.geomspace(50.0, 2000.0, 30))
+    np.testing.assert_allclose(problem.jacobian(m).sum(axis=1), 1.0, atol=1e-10)
+
+
 def test_layer_thicknesses() -> None:
     h = _layer_thicknesses(_data(300.0), 30, None)
     assert h.size == 29
@@ -164,6 +219,7 @@ def test_too_few_iterations_warns() -> None:
     ("kwargs", "match"),
     [
         ({"n_layers": 1}, "at least 2 layers"),
+        ({"max_iter": 0}, "max_iter must be at least 1"),
         ({"depth_range": (5.0, 1.0)}, "0 < top < bottom"),
         ({"depth_range": (0.0, 10.0)}, "0 < top < bottom"),
     ],
