@@ -11,3 +11,30 @@ between minor releases; the [changelog](changelog.md) records every change.
 
    show_versions
 ```
+
+## Vertical electrical sounding
+
+```{eval-rst}
+.. currentmodule:: ertkit.ves
+
+.. autosummary::
+   :toctree: generated
+
+   LayeredModel
+   Survey
+   forward
+   potential
+   resistivity_transform
+   hankel_j0
+```
+
+## Electrode arrays
+
+```{eval-rst}
+.. currentmodule:: ertkit.arrays
+
+.. autosummary::
+   :toctree: generated
+
+   geometric_factor
+```

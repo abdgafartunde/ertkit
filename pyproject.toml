@@ -129,10 +129,15 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 minversion = "8.4"
 testpaths = ["tests"]
+pythonpath = ["tests"]
 addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
 xfail_strict = true
 log_level = "INFO"
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # numpy 2.0's testing utilities open a file without an encoding.
+    "ignore::EncodingWarning:numpy",
+]
 markers = [
     "slow: long-running tests, excluded from the oldest-dependencies job",
     "verification: checks that feed the verification report",
