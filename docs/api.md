@@ -33,6 +33,7 @@ between minor releases; the [changelog](changelog.md) records every change.
    LayerFit
    invert_smooth
    SmoothFit
+   DOI_THRESHOLD
    forward
    potential
    resistivity_transform
@@ -48,4 +49,18 @@ between minor releases; the [changelog](changelog.md) records every change.
    :toctree: generated
 
    geometric_factor
+```
+
+## Plotting
+
+Needs matplotlib: `pip install "ertkit[plot]"`.
+
+```{eval-rst}
+.. currentmodule:: ertkit.plot
+
+.. autosummary::
+   :toctree: generated
+
+   sounding
+   layered_model
 ```

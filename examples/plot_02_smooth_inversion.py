@@ -34,7 +34,8 @@ print(f"depth of investigation: {smooth.doi:.1f} m")
 # %%
 # The shaded region lies below the depth of investigation: two further
 # inversions, pulled towards very different reference models, disagree there,
-# so the data do not determine the resistivity at those depths.
+# so the data do not determine the resistivity at those depths. The depth axis
+# is logarithmic, which suits layers that thicken with depth.
 
 ax = plot.layered_model(
     truth, smooth, labels=["true model", "smooth model"], log_depth=True
@@ -47,11 +48,17 @@ ax = plot.layered_model(
 import matplotlib.pyplot as plt
 
 tops = np.concatenate([[0.0], smooth.model.depths])
+bottoms = np.concatenate([smooth.model.depths, [2.0 * smooth.model.depths[-1]]])
 fig, ax = plt.subplots(figsize=(4.5, 4.5), layout="constrained")
-ax.step(smooth.doi_index, tops, where="post")
-ax.axvline(ves.smooth.DOI_THRESHOLD, color="gray", linestyle="--", label="threshold")
+# One vertical segment per layer, spanning its depth range.
+ax.plot(
+    np.repeat(smooth.doi_index, 2),
+    np.ravel(np.column_stack([np.maximum(tops, 0.5 * tops[1]), bottoms])),
+)
+ax.axvline(ves.DOI_THRESHOLD, color="gray", linestyle="--", label="threshold")
+ax.axhline(smooth.doi, color="black", linewidth=0.8, label="depth of investigation")
 ax.set_yscale("log")
-ax.invert_yaxis()
+ax.set_ylim(bottoms[-1], 0.5 * tops[1])
 ax.set_xlabel("depth-of-investigation index")
 ax.set_ylabel("depth (m)")
 ax.legend()

@@ -26,7 +26,7 @@ survey = ves.Survey.schlumberger(ab2=ab2, mn2=np.where(ab2 < 25, 0.5, 5.0))
 # Errors of 3% on the transfer resistance, the default, which includes a
 # modeling-error floor.
 noise = ertkit.ErrorModel(relative=0.03)
-data = ves.Sounding.synthetic(truth, survey, noise, rng=1)
+data = ves.Sounding.synthetic(truth, survey, noise, rng=5)
 
 # %%
 # Inversion
@@ -40,7 +40,8 @@ print(
 
 # %%
 # Each parameter with its linearized uncertainty, as a multiplicative factor
-# (one standard deviation), next to the true value:
+# (one standard deviation), next to the true value. "x/ 1.04" means "multiply
+# or divide by 1.04".
 
 true_values = np.concatenate([truth.resistivity, truth.thickness])
 estimates = np.concatenate([fit.model.resistivity, fit.model.thickness])

@@ -523,6 +523,7 @@ lint = [
 ]
 test = [
     { name = "hypothesis" },
+    { name = "matplotlib" },
     { name = "pytest" },
     { name = "pytest-cov" },
 ]
@@ -568,6 +569,7 @@ lint = [
 ]
 test = [
     { name = "hypothesis", specifier = ">=6.130" },
+    { name = "matplotlib", specifier = ">=3.10" },
     { name = "pytest", specifier = ">=8.4" },
     { name = "pytest-cov", specifier = ">=6.0" },
 ]

@@ -5,8 +5,6 @@ libdlf; plotting needs matplotlib, which the `plot` extra installs.
 
 ## From PyPI
 
-Release 0.1 will be the first on PyPI. Once it is out:
-
 ```bash
 pip install ertkit            # core
 pip install "ertkit[plot]"    # with plotting

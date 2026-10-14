@@ -1,4 +1,4 @@
-"""ertkit: verified VES and 2.5-D ERT inversion for groundwater exploration."""
+"""ertkit: resistivity inversion for groundwater exploration."""
 
 from __future__ import annotations
 

@@ -126,6 +126,16 @@ def hankel_j0(
     -------
     ndarray
         :math:`F(r)`, one value per distance.
+
+    Raises
+    ------
+    ValueError
+        If a distance is not positive and finite.
+
+    Notes
+    -----
+    Filter values from libdlf (https://github.com/emsig/libdlf), licensed
+    CC BY 4.0.
     """
     base, weights = _filter()
     r = np.atleast_1d(np.asarray(r, dtype=np.float64))
@@ -175,6 +185,11 @@ def potential(
     -------
     ndarray of float
         Potential in volts, one value per distance.
+
+    Raises
+    ------
+    ValueError
+        If a distance is not positive and finite.
     """
     r = np.atleast_1d(np.asarray(r, dtype=np.float64))
     if np.any(~(r > 0)) or not np.all(np.isfinite(r)):

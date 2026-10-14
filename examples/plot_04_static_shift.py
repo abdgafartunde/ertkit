@@ -11,8 +11,8 @@ a multiplicative shift for each segment along with the model.
 # %%
 # Data with a shifted second segment
 # ----------------------------------
-# Two readings are repeated with both MN spacings, as field crews do to check
-# the overlap.
+# The two segments overlap between AB/2 = 10 m and 14 m, as field crews arrange
+# to check the step between segments.
 
 import numpy as np
 

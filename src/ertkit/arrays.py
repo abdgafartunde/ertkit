@@ -37,9 +37,9 @@ def geometric_factor(
     Returns
     -------
     ndarray of float
-        Geometric factor in meters. It is negative when :math:`M` is farther
-        than :math:`N` from the current source, as in a dipole-dipole array
-        whose potential dipole lies beyond :math:`B`.
+        Geometric factor in meters. It is negative when :math:`V_M < V_N` on a
+        half-space, as in a dipole-dipole array ordered A, B, M, N, where
+        :math:`M` is nearer than :math:`N` to the current sink :math:`B`.
 
     Raises
     ------

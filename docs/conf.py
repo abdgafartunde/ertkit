@@ -39,6 +39,8 @@ myst_enable_extensions = ["dollarmath", "amsmath", "tasklist", "deflist"]
 myst_heading_anchors = 3
 
 autosummary_generate = True
+templates_path = ["_templates"]
+autodoc_typehints = "none"  # numpydoc already gives the types
 numpydoc_show_class_members = False
 numpydoc_class_members_toctree = False
 
@@ -46,13 +48,16 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable", None),
     "scipy": ("https://docs.scipy.org/doc/scipy", None),
+    "matplotlib": ("https://matplotlib.org/stable", None),
 }
+intersphinx_timeout = 30
 
 sphinx_gallery_conf = {
     "examples_dirs": "../examples",
     "gallery_dirs": "auto_examples",
     "filename_pattern": r"\.py$",
     "download_all_examples": False,
+    "within_subsection_order": "FileNameSortKey",
     "remove_config_comments": True,
 }
 

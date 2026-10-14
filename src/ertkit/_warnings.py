@@ -10,4 +10,9 @@ class ConvergenceWarning(UserWarning):
 
 
 class DataWarning(UserWarning):
-    """Some data were removed or are unreliable (for example near the noise level)."""
+    """Data were removed, or the data cannot support a result as requested.
+
+    Raised for removed readings, a poor fit, parameters the data do not
+    resolve, an undetermined depth of investigation, and errors that appear
+    over- or underestimated.
+    """
