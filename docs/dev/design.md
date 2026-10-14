@@ -270,8 +270,10 @@ report.
    $\ln S$ is at most 0.2 times the widths for $\ln h$ and $\ln \rho$, and their
    posterior correlation is at least 0.95; likewise for $T$ on a thin resistive
    layer.
-9. **Cross-check.** Forward responses agree with pyGIMLi's VES modeling within
-   0.1%, and with SimPEG run with a different filter.
+9. **Cross-check.** Forward responses agree with pyGIMLi's VES modeling and
+   with SimPEG run with a different filter (Anderson 801-point) within
+   $10^{-5}$ relative. (The first weekly run measured at most $1.5 \times 10^{-6}$
+   and $2.3 \times 10^{-6}$, so the original 0.1% gate was tightened.)
 
 The two-layer image series, with reflection coefficient
 $\kappa = (\rho_2 - \rho_1)/(\rho_2 + \rho_1)$ and first-layer thickness $h$, is
