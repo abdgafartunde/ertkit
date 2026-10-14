@@ -31,6 +31,8 @@ between minor releases; the [changelog](changelog.md) records every change.
    write_csv
    invert_few_layer
    LayerFit
+   invert_smooth
+   SmoothFit
    forward
    potential
    resistivity_transform
