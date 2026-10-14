@@ -1,0 +1,4 @@
+# Independent codes used by the weekly cross-check job (tests/crosscheck).
+# Pinned to a minor series so that their own changes do not move the target.
+pygimli>=1.6,<2
+simpeg>=0.25,<0.26

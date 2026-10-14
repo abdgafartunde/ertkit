@@ -1,7 +1,8 @@
 name: Weekly
 
-# Checks that are useful but must not block pull requests. The cross-check
-# against pyGIMLi and SimPEG joins this workflow with release 0.1.
+# Checks that are useful but must not block pull requests: links in the
+# documentation, and the cross-check against pyGIMLi and SimPEG (run it before
+# each release with "Run workflow").
 
 on:
   schedule:
@@ -30,3 +31,31 @@ jobs:
         run: uv sync --locked --no-default-groups --group docs
       - name: Check links
         run: uv run --no-sync sphinx-build -b linkcheck docs docs/_build/linkcheck
+
+  crosscheck:
+    name: Cross-check against pyGIMLi and SimPEG
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      # pyGIMLi's compiled core has Linux wheels for Python 3.10 to 3.14 only.
+      - name: Install ertkit and the codes to compare with
+        run: |
+          uv venv --python 3.13
+          uv pip install -e . --group test -r ci/crosscheck.txt
+          uv pip list | grep -i -E "^(ertkit|pygimli|pgcore|simpeg|numpy|scipy) "
+      - name: Cross-check
+        env:
+          ERTKIT_REQUIRE_CROSSCHECK: "1"
+        run: .venv/bin/python -m pytest -m crosscheck -p no:cacheprovider --verification-report=crosscheck.json
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: crosscheck
+          path: crosscheck.json
+          if-no-files-found: ignore
