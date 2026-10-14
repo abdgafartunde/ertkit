@@ -23,6 +23,8 @@ pytestmark = [
     pytest.mark.crosscheck,
     pytest.mark.filterwarnings("ignore::DeprecationWarning"),
     pytest.mark.filterwarnings("ignore::FutureWarning"),
+    # pyGIMLi's source has invalid escape sequences (SyntaxWarning in Python 3.12+).
+    pytest.mark.filterwarnings("ignore::SyntaxWarning"),
     pytest.mark.filterwarnings("ignore::UserWarning:pygimli"),
 ]
 
