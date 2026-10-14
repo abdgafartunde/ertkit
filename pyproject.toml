@@ -136,8 +136,10 @@ xfail_strict = true
 log_level = "INFO"
 filterwarnings = [
     "error",
-    # numpy 2.0's testing utilities open a file without an encoding.
+    # numpy 2.0's testing utilities and matplotlib 3.10 open files without an
+    # encoding; only warnings from those packages are ignored.
     "ignore::EncodingWarning:numpy",
+    "ignore::EncodingWarning:matplotlib",
 ]
 markers = [
     "slow: long-running tests, excluded from the oldest-dependencies job",

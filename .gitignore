@@ -23,6 +23,7 @@ htmlcov/
 docs/_build/
 docs/auto_examples/
 docs/generated/
+docs/_generated/
 docs/sg_execution_times.rst
 
 # Editors and operating systems

@@ -31,9 +31,10 @@ the mathematics and the verification plan.
 
 ## Status
 
-ertkit is in its foundation stage: the repository, tests, documentation and
-release pipeline are being set up, and there is no science code yet. Planned
-releases:
+Release 0.1, vertical electrical sounding, is in development on the `main`
+branch: the forward model, few-layer inversion with linearized uncertainty,
+smooth inversion with a depth of investigation, CSV input and plotting are
+done and verified. Planned releases:
 
 | Release | Content |
 |---|---|
