@@ -31,8 +31,10 @@ $$
 $$
 
 (Pekeris 1940; Koefoed 1979). The integral is evaluated with the 120-point
-digital filter of Guptasarma and Singh (1997), which stays accurate even for
-resistivity contrasts of 1000 between layers.
+digital linear filter (Ghosh 1971) of Guptasarma and Singh (1997), whose
+relative error stays below about $10^{-6}$ for resistivity contrasts up to
+$10^4$ between layers. The filter values come from
+[libdlf](https://github.com/emsig/libdlf) and are licensed CC BY 4.0.
 
 A reading with current electrodes $A$, $B$ and potential electrodes $M$, $N$
 gives the apparent resistivity
@@ -57,9 +59,10 @@ s_R = a + b \thinspace |R|,
 $$
 
 with an absolute part $a$ in ohms and a relative part $b$ (LaBrecque et al.
-1996). The default, 3% relative, includes a floor for modeling errors: no
-layered model describes a real site exactly, and fitting field data more
-closely than about 2 to 3% usually means fitting noise (Tso et al. 2017).
+1996). The default, 3% relative, is a common choice that includes a floor for
+modeling errors: no layered model describes a real site exactly, so field data
+should not be fitted more closely than such errors allow. Error models fitted
+to reciprocal measurements (Tso et al. 2017) can justify other values.
 
 The inversions work with $d_i = \ln \rho_{a,i}$, whose standard deviations are
 $s_i = b + a/|R_i|$, and measure the misfit by
@@ -105,7 +108,7 @@ whose resistivity lies between those of its neighbors can be almost invisible
 reveals this through large uncertainty factors, but a linearized uncertainty
 can still understate the range of acceptable models. Release 0.2 adds an
 equivalence analysis that samples that range directly. The
-[equivalence example](../auto_examples/plot_equivalence.rst) shows a
+[equivalence example](../auto_examples/plot_03_equivalence.rst) shows a
 fractured zone in crystalline basement that the data barely constrain.
 
 ## Smooth inversion and depth of investigation
@@ -143,12 +146,44 @@ The result, a {class}`~ertkit.ves.SmoothFit`, includes:
   the geometric mean of the horizontal and vertical resistivities, and a
   thickness scaled by the coefficient of anisotropy, are resolved, so depths
   can come out too large.
-- Errors in electrode positions, and remote electrodes that are not far
-  enough away, bias apparent resistivities (Zhou and Dahlin 2003).
+- Errors in electrode positions bias apparent resistivities (Zhou and Dahlin
+  2003).
 - A low resistivity can mean water-bearing material, clay, or both. The
   inversion cannot tell these apart; that takes geological knowledge.
 
 ## References
 
-The full list, with complete details, is in the
-[design document](../dev/design.md#references).
+- Binley, A., Slater, L. (2020). *Resistivity and Induced Polarization:
+  Theory and Applications to the Near-Surface Earth*. Cambridge University
+  Press.
+- Constable, S. C., Parker, R. L., Constable, C. G. (1987). Occam's inversion:
+  a practical algorithm for generating smooth models from electromagnetic
+  sounding data. *Geophysics*, 52(3), 289–300.
+- Ghosh, D. P. (1971). The application of linear filter theory to the direct
+  interpretation of geoelectrical resistivity sounding measurements.
+  *Geophysical Prospecting*, 19(2), 192–217.
+- Guptasarma, D., Singh, B. (1997). New digital linear filters for Hankel J0
+  and J1 transforms. *Geophysical Prospecting*, 45(5), 745–762.
+- Koefoed, O. (1979). *Geosounding Principles 1: Resistivity Sounding
+  Measurements*. Elsevier.
+- LaBrecque, D. J., Miletto, M., Daily, W., Ramirez, A., Owen, E. (1996). The
+  effects of noise on Occam's inversion of resistivity tomography data.
+  *Geophysics*, 61(2), 538–548.
+- Maillet, R. (1947). The fundamental equations of electrical prospecting.
+  *Geophysics*, 12(4), 529–556.
+- Marescot, L., Loke, M. H., Chapellier, D., Delaloye, R., Lambiel, C.,
+  Reynard, E. (2003). Assessing reliability of 2D resistivity imaging in
+  mountain permafrost studies using the depth of investigation index method.
+  *Near Surface Geophysics*, 1(2), 57–67.
+- Oldenburg, D. W., Li, Y. (1999). Estimating depth of investigation in DC
+  resistivity and IP surveys. *Geophysics*, 64(2), 403–416.
+- Pekeris, C. L. (1940). Direct method of interpretation in resistivity
+  prospecting. *Geophysics*, 5(1), 31–42.
+- Tso, C.-H. M., Kuras, O., Wilkinson, P. B., Uhlemann, S., Chambers, J. E.,
+  Meldrum, P. I., Graham, J., Sherlock, E. F., Binley, A. (2017). Improved
+  characterisation and modelling of measurement errors in electrical
+  resistivity tomography (ERT) surveys. *Journal of Applied Geophysics*, 146,
+  103–119.
+- Zhou, B., Dahlin, T. (2003). Properties and effects of measurement errors
+  on 2D resistivity imaging surveying. *Near Surface Geophysics*, 1(3),
+  105–117.

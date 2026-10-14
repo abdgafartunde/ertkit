@@ -68,26 +68,47 @@ checked by hand.
 
 ## Documentation deployment
 
-Until release 0.1 the documentation is deployed from `main`; from 0.1 it is
-deployed when a release is published, so the website always matches the
-latest release.
+The documentation is built for every pull request and push to `main`, and
+deployed when a release is published, so the website matches the latest
+release; a manual run of the Docs workflow redeploys it (for example after
+adding the DOI).
+
+## Maintainer's sign-off checklist
+
+Before each release the maintainer checks, personally:
+
+- the derivations behind the release's new methods, against the design
+  document and the cited papers;
+- that every tolerance in the verification report has a sound justification;
+- the verification report and the cross-check results of the release
+  candidate;
+- that the examples' text matches what they print;
+- the AI-assisted review's findings and how each was resolved.
 
 ## Release checklist
 
-1. All CI checks pass on `main`, and the weekly cross-check job has been run
-   (from 0.1).
+1. All CI checks pass on `main`, and the weekly cross-check workflow has been
+   run on the release candidate.
 2. The AI-assisted review is done and the maintainer's sign-off checklist
-   (derivations, tolerances, verification report) is complete.
+   above is complete.
 3. `CHANGELOG.md`: rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD` and add a
    new empty `[Unreleased]` section.
-4. `CITATION.cff`: set `version` and `date-released`.
+4. `CITATION.cff`: set `version` and `date-released`. `README.md`: update the
+   status section.
 5. `uv run pre-commit autoupdate` has been run, unless pre-commit.ci keeps
    the hooks current.
 6. A development build uploaded to TestPyPI (manual run of the `Release`
    workflow) installs and imports correctly.
-7. Create the GitHub release with tag `vX.Y.Z`. The `Release` workflow checks
-   that the tag matches `CITATION.cff` and `CHANGELOG.md`, then uploads to
-   PyPI; Zenodo archives the release and issues a DOI.
+7. Check that `.zenodo.json` is present, the Zenodo webhook is on, the PyPI
+   trusted publisher exists, and the `github-pages` environment allows tags
+   `v*`.
+8. Create the GitHub release with tag `vX.Y.Z`; its notes summarize the AI
+   assistance and what the maintainer checked by hand. The `Release` workflow
+   checks that the tag matches `CITATION.cff` and `CHANGELOG.md`, then uploads
+   to PyPI; Zenodo archives the release and issues a DOI, and the Docs
+   workflow deploys the documentation.
+9. After the release: add the DOI to `CITATION.cff`, the README and
+   `docs/citing.md`, then run the Docs workflow manually.
 
 ## Repository review exceptions
 

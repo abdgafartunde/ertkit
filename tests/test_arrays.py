@@ -24,7 +24,7 @@ def test_dipole_dipole(n: int) -> None:
     a = 2.0  # A at 0, B at a, M at (n+1)a, N at (n+2)a
     k = geometric_factor((n + 1) * a, n * a, (n + 2) * a, (n + 1) * a)
     np.testing.assert_allclose(abs(k), np.pi * n * (n + 1) * (n + 2) * a, rtol=1e-12)
-    assert k < 0  # M lies farther than N from the current source
+    assert k < 0  # V_M < V_N: M is nearer than N to the current sink B
 
 
 def test_pole_dipole_with_remote_electrode() -> None:

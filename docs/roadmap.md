@@ -14,4 +14,5 @@ Each release is complete, verified and reviewed before it is published. The
 | 1.0 | Stable public API; documentation of every public function and of the theory. |
 
 Not planned for 1.0: 3-D surveys, surface topography, time-lapse inversion,
-induced polarization, joint inversion and machine learning.
+induced polarization, joint inversion, machine learning, and the
+petrophysical translation of resistivity into water content.

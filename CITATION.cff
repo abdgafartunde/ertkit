@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use ertkit in your work, please cite it as below, together with the methods it implements."
-title: "ertkit: verified VES and 2.5-D ERT inversion for groundwater exploration"
+title: "ertkit: resistivity inversion for groundwater exploration, with uncertainty and depth of investigation"
 type: software
 authors:
   - family-names: Tiamiyu
@@ -12,11 +12,11 @@ license: MIT
 repository-code: "https://github.com/abdgafartunde/ertkit"
 url: "https://abdgafartunde.github.io/ertkit/"
 abstract: >-
-  ertkit inverts vertical electrical sounding (VES) and 2.5-D electrical
-  resistivity tomography (ERT) data for groundwater exploration. Each result
-  comes with a data error model and a fit to the noise level, sensitivity and
-  depth of investigation, and parameter uncertainty, including the range of
-  equivalent models for VES.
+  ertkit inverts vertical electrical sounding (VES) data for groundwater
+  exploration; 2.5-D electrical resistivity tomography (ERT) follows in later
+  releases. Each result comes with a data error model and a fit to the noise
+  level, linearized parameter uncertainty, sensitivity and a depth of
+  investigation.
 keywords:
   - electrical resistivity tomography
   - vertical electrical sounding

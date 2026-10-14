@@ -1,9 +1,10 @@
 # ertkit design document
 
-Status: draft, revised after review of the mathematics and of the software
-design, 14 October 2026. Nothing here is implemented yet. Names in the
-code sketches may change during implementation; the public API becomes stable
-at 1.0.
+Status: release 0.1 (sections 3.1 to 3.3 and the 0.1 criteria of section
+3.5) is implemented; later sections are plans. This document was revised after
+AI-assisted reviews of the design (October 2026) and of release 0.1. Names in
+the sketches for later releases may change; the public API becomes stable at
+1.0.
 
 ## 1. Purpose
 
@@ -480,19 +481,24 @@ is the expected L1 norm, about $N_d \sqrt{2/\pi}$ for Gaussian errors.
 src/ertkit/
     __init__.py        version, show_versions, top-level names
     noise.py           ErrorModel
-    results.py         result base class and save/load
+    results.py         result base class (save/load planned)
     arrays.py          electrode configurations and geometric factors
-    benchmarks.py      mesh-free benchmark models
-    _inversion.py      shared Gauss-Newton, Levenberg-Marquardt and Occam driver
-    ves/               survey.py, model.py, forward.py, invert.py, equivalence.py, io.py
+    _linalg.py         matrix product that checks its result
+    _warnings.py       ConvergenceWarning, DataWarning
+    benchmarks.py      mesh-free benchmark models (planned)
+    _inversion.py      shared inversion driver (planned, with ERT)
+    ves/               survey.py, model.py, data.py, forward.py, invert.py,
+                       smooth.py, io.py; equivalence.py (0.2)
     ert/               mesh.py, quadrature.py, forward.py, sensitivity.py,
                        invert.py, doi.py, io.py          (from 0.3)
     plot/              optional; needs the [plot] extra
 ```
 
-The shared inversion driver works with any forward model that provides
-`predict(m)` and `jacobian(m)` (a typing `Protocol`), so VES and ERT use the
-same tested code. The public API is what `__all__` lists and the API reference
+In 0.1 the VES inversions have their own drivers: the few-layer fit uses
+`scipy.optimize.least_squares` and the smooth fit implements Occam's
+iteration. A shared driver for forward models that provide `predict(m)` and
+`jacobian(m)` (a typing `Protocol`) is planned with ERT, when a second forward
+model makes it worthwhile. The public API is what `__all__` lists and the API reference
 documents. The building blocks a teaching kit replaces, `ves.resistivity_transform`,
 `ves.hankel_j0` and `arrays.geometric_factor`, are public and become stable at
 1.0.
@@ -504,17 +510,20 @@ documents. The building blocks a teaching kit replaces, `ves.resistivity_transfo
   `__post_init__` converts arrays with `np.asarray(..., dtype=float)`,
   validates them, copies them and marks them read-only, so that frozen
   instances are really immutable.
-- **Results** share a base class (model, predicted data, $\chi^2$ and its
-  target, history, convergence flag, and a stop reason from a fixed set of
-  strings), with subclasses for few-layer fits, smooth fits, ERT inversions and
-  equivalence ensembles. Results can be saved and loaded.
+- **Results** share a base class (predicted data, $\chi^2$ and its target,
+  convergence flag, stop reason, number of iterations), with subclasses for
+  few-layer fits and smooth fits that add the model and its reliability
+  measures; their arrays are read-only. Planned: an iteration history, stop
+  reasons from a fixed set of strings (the few-layer fit currently reports
+  scipy's message), and saving and loading of results (release 0.2).
 - **Units** are SI (ohm meters, meters, amperes, volts), stated in every
   docstring.
 - **Randomness** follows SPEC 7: functions take an `rng` argument (a seed or a
   numpy `Generator`), normalized with `np.random.default_rng`.
-- **Messages.** There is no printing. Progress goes to
-  `logging.getLogger(__name__)` (with a `NullHandler`), and non-convergence
-  raises `ertkit.ConvergenceWarning`, a subclass of `UserWarning`.
+- **Messages.** There is no printing. Non-convergence raises
+  `ertkit.ConvergenceWarning` and data problems `ertkit.DataWarning`, both
+  subclasses of `UserWarning`. The package logger has a `NullHandler`;
+  progress logging is planned for the longer ERT inversions.
 - **Validation** of inputs gives clear error messages.
 - **Typing.** The public interface is fully typed and ships `py.typed`; inputs
   are annotated as `ArrayLike` and outputs as `NDArray[np.float64]`.
@@ -543,7 +552,7 @@ data = ves.Sounding.synthetic(truth, survey, noise, rng=1)  # or ves.read_csv(pa
 fit = ves.invert_few_layer(
     data, n_layers=3, rng=0
 )  # LayerFit: .std_log, .factor, .correlation, .depths
-smooth = ves.invert_smooth(data)  # SmoothFit: .sensitivity, .doi_depth
+smooth = ves.invert_smooth(data)  # SmoothFit: .sensitivity, .doi_index, .doi
 ens = ves.sample_equivalence(data, fit, bounds=..., n_chains=4, n_samples=5_000, rng=0)
 
 # ERT (0.3 to 0.5; provisional)
@@ -581,9 +590,9 @@ doi = ert.doi_index(result)  # reuses the result's settings
 - `uv.lock` is committed; the quality, docs and test jobs install with
   `uv sync --locked`; Dependabot updates the lock file and the workflow
   actions monthly, so CI meets new numpy and scipy versions before users do.
-- **Release pipeline** (`release.yml`): every pull request builds the sdist and
-  wheel and checks them (`twine check --strict`, `check-wheel-contents`, install
-  and import). A manual run uploads a development version to TestPyPI; a
+- **Release pipeline.** The CI workflow (`ci.yml`) builds and checks the sdist
+  and wheel on every pull request (`twine check --strict`,
+  `check-wheel-contents`, install and import). In `release.yml`, a manual run uploads a development version to TestPyPI; a
   published GitHub release uploads to PyPI by trusted publishing from the
   protected `pypi` environment, after checking that the tag matches the
   version in CITATION.cff and the top CHANGELOG heading. Zenodo is switched on
@@ -679,23 +688,23 @@ doi = ert.doi_index(result)  # reuses the result's settings
 
 ### 7.1 Checklist
 
-- [ ] README rewritten before 19 October (statement of need, status, roadmap,
+- [x] README rewritten before 19 October (statement of need, status, roadmap,
       installation), since the website and a blog post link to it
-- [ ] LICENSE at the repository root
-- [ ] `src/ertkit` with `__init__.py`, `py.typed`, `show_versions`; a package
+- [x] LICENSE at the repository root
+- [x] `src/ertkit` with `__init__.py`, `py.typed`, `show_versions`; a package
       test (version matches metadata, `py.typed` shipped, `import ertkit` does
       not import matplotlib)
-- [ ] pyproject.toml and `uv.lock`
-- [ ] `.gitignore`, `.gitattributes`, `.git_archival.txt`,
+- [x] pyproject.toml and `uv.lock`
+- [x] `.gitignore`, `.gitattributes`, `.git_archival.txt`,
       `.pre-commit-config.yaml`, `.mailmap`
-- [ ] Workflows: `ci.yml`, `docs.yml`, `release.yml`, `weekly.yml`; Dependabot
-- [ ] Documentation site skeleton with one trivial gallery example
-- [ ] CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT, CITATION.cff (no version or DOI
+- [x] Workflows: `ci.yml`, `docs.yml`, `release.yml`, `weekly.yml`; Dependabot
+- [x] Documentation site skeleton with one trivial gallery example
+- [x] CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT, CITATION.cff (no version or DOI
       until 0.1), issue and pull request templates
-- [ ] Repository settings: Pages from GitHub Actions; ruleset on `main`;
+- [x] Repository settings: Pages from GitHub Actions; ruleset on `main`;
       squash merges only; branches deleted after merge; wiki off; topics; the
       documentation as homepage
-- [ ] PyPI and TestPyPI accounts with pending trusted publishers (owner
+- [x] PyPI and TestPyPI accounts with pending trusted publishers (owner
       `abdgafartunde`, repository `ertkit`, workflow `release.yml`,
       environments `pypi` and `testpypi`)
 

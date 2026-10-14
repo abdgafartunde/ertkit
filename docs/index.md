@@ -7,7 +7,15 @@ ertkit is a Python package, in early development, for inverting vertical
 electrical sounding (VES) and 2.5-D electrical resistivity tomography (ERT)
 data. Each result is designed to come with a data error model and a fit to the
 noise level, sensitivity and depth of investigation, and parameter
-uncertainty, including, for VES, the range of equivalent models.
+uncertainty, including, for VES from release 0.2, the range of equivalent
+models.
+
+Boreholes are often sited from resistivity models whose reliability was never
+quantified. Open tools such as [pyGIMLi](https://www.pygimli.org),
+[SimPEG](https://simpeg.xyz) and [ResIPy](https://gitlab.com/hkex/resipy)
+already provide excellent modeling and inversion; ertkit focuses on making
+reliability the default output, publishing a verification report with every
+release, and keeping the code small enough to teach from.
 
 The first release, 0.1, covers vertical electrical sounding: a layered-earth
 forward model, few-layer inversion with linearized uncertainty, smooth

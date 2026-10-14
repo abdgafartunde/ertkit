@@ -134,6 +134,8 @@ def write_csv(
 ) -> None:
     """Write a sounding to a CSV file readable by :func:`read_csv`.
 
+    The error model is not written; pass it to :func:`read_csv` again.
+
     Parameters
     ----------
     sounding : Sounding

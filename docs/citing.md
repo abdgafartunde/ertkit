@@ -1,10 +1,9 @@
 # Citing ertkit
 
-A Zenodo DOI will be issued with release 0.1, and this page will then give the
-citation. Until then, cite the repository,
-<https://github.com/abdgafartunde/ertkit>, using the metadata in
-`CITATION.cff`.
+Each release of ertkit is archived on Zenodo, which issues a DOI for every
+version and a concept DOI that always resolves to the latest version. The
+citation metadata are in
+[CITATION.cff](https://github.com/abdgafartunde/ertkit/blob/main/CITATION.cff).
 
-Please also cite the methods ertkit implements. The references are listed in
-the [design document](dev/design.md#references) and, from release 0.1, in the
-documentation of each function.
+Please also cite the methods ertkit implements; the references are listed in
+the [user guide](user_guide/ves.md#references).

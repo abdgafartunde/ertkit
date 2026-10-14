@@ -67,6 +67,9 @@ jobs:
       - name: Test
         if: ${{ !matrix.coverage }}
         run: uv run --no-sync pytest
+      - name: Doctests
+        if: ${{ matrix.coverage }}
+        run: uv run --no-sync pytest --doctest-modules src/ertkit -p no:cacheprovider
       - name: Test with coverage
         if: ${{ matrix.coverage }}
         run: |

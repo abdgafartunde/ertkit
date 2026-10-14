@@ -39,6 +39,15 @@ class Survey:
     See Also
     --------
     Survey.schlumberger, Survey.wenner
+
+    Examples
+    --------
+    >>> from ertkit.ves import Survey
+    >>> survey = Survey.schlumberger(ab2=[3.0, 10.0, 30.0], mn2=0.5)
+    >>> survey.n_readings
+    3
+    >>> Survey.wenner([2.0, 5.0]).mn2.tolist()
+    [1.0, 2.5]
     """
 
     ab2: NDArray[np.float64]
