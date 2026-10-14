@@ -32,6 +32,11 @@ project uses [semantic versioning](https://semver.org/).
   standard deviations), a goodness-of-fit p-value, optional static-shift
   factors per MN segment, and warnings for poor fits and unresolved
   parameters. Results are `ves.LayerFit` objects.
+- Smooth (Occam) VES inversion, `ves.invert_smooth`: many layers with
+  logarithmically growing thicknesses, the target misfit chi2 = N_d with the
+  largest regularization weight that reaches it, the error-weighted
+  sensitivity of each layer, and the Oldenburg and Li depth of investigation
+  from two reference-model inversions. Results are `ves.SmoothFit` objects.
 - An honest-uncertainty test: over 1000 noise draws, the misfit and the
   coverage of the linearized intervals match their theoretical values.
 - `arrays.geometric_factor` for any four-electrode array, including remote

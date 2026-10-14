@@ -210,7 +210,10 @@ $\chi^2 = N_d$.
   with $\hat d = d - f(m_k) + J m_k$. While the target $\chi^2 = N_d$ cannot
   be reached, $\mu$ minimizes the nonlinear $\chi^2$; once it can, $\mu$ is
   the largest value with $\chi^2 = N_d$. The result includes the sensitivity
-  of the data to each layer and a 1-D depth of investigation.
+  of the data to each layer and a 1-D depth of investigation by the method of
+  Oldenburg and Li (1999), as in section 4.3, using the magnitude of the index:
+  near the transition the two reference models can overshoot in opposite
+  directions, which makes the index negative there.
 
 ### 3.4 Equivalence and number of layers (0.2)
 

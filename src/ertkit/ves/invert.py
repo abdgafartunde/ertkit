@@ -23,6 +23,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy import optimize, stats
 
+from ertkit._linalg import matmul
 from ertkit._warnings import ConvergenceWarning, DataWarning
 from ertkit.results import InversionResult
 from ertkit.ves.data import Sounding
@@ -335,7 +336,7 @@ def invert_few_layer(
         )
 
     weighted = problem.jacobian(m) / problem.s[:, np.newaxis]
-    covariance = np.linalg.pinv(weighted.T @ weighted)
+    covariance = np.linalg.pinv(matmul(weighted.T, weighted))
     std_log = np.sqrt(np.clip(np.diag(covariance), 0.0, None))
     with np.errstate(divide="ignore", invalid="ignore"):
         correlation = covariance / np.outer(std_log, std_log)
