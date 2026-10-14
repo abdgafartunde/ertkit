@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import ertkit
+
+sys.path.insert(0, str(Path(__file__).parent / "_ext"))
 
 project = "ertkit"
 author = "Abd'gafar Tunde Tiamiyu"
@@ -18,10 +23,16 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
     "sphinx_gallery.gen_gallery",
+    "verification_report",
 ]
 
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
-exclude_patterns = ["_build", "**.ipynb_checkpoints", "auto_examples/*.ipynb"]
+exclude_patterns = [
+    "_build",
+    "_generated",
+    "**.ipynb_checkpoints",
+    "auto_examples/*.ipynb",
+]
 
 # MyST: $...$ and $$...$$ math, task lists in the design document.
 myst_enable_extensions = ["dollarmath", "amsmath", "tasklist", "deflist"]

@@ -30,6 +30,7 @@ uv run pre-commit install        # runs the formatters and linters on commit
 | Fast tests only | `uv run pytest -m "not slow"` |
 | Lint and format | `uv run pre-commit run --all-files` |
 | Type check | `uv run mypy` |
+| Verification report (for the docs) | `uv run pytest -m verification --verification-report=docs/_generated/verification.json` |
 | Documentation | `uv run sphinx-build -W --keep-going docs docs/_build/html` |
 
 Test markers: `slow` (long tests, skipped by the oldest-dependencies job),
