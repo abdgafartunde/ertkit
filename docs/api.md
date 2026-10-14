@@ -10,6 +10,9 @@ between minor releases; the [changelog](changelog.md) records every change.
    :toctree: generated
 
    show_versions
+   ErrorModel
+   ConvergenceWarning
+   DataWarning
 ```
 
 ## Vertical electrical sounding
@@ -22,6 +25,9 @@ between minor releases; the [changelog](changelog.md) records every change.
 
    LayeredModel
    Survey
+   Sounding
+   read_csv
+   write_csv
    forward
    potential
    resistivity_transform

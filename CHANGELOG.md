@@ -18,6 +18,13 @@ project uses [semantic versioning](https://semver.org/).
   with finite and changing MN, and Wenner soundings), `ves.forward`,
   `ves.potential`, and the building blocks `ves.resistivity_transform` and
   `ves.hankel_j0` (Guptasarma and Singh 120-point filter).
+- `ErrorModel`: measurement errors on the transfer resistance, with a 3%
+  relative default that includes a modeling-error floor.
+- `ves.Sounding` (data with their error model; readings with R <= 0 or below
+  the noise level are removed with a `DataWarning`), synthetic data with
+  `Sounding.synthetic`, and CSV input and output with `ves.read_csv` and
+  `ves.write_csv` (explicit text encoding).
+- Warning categories `ConvergenceWarning` and `DataWarning`.
 - `arrays.geometric_factor` for any four-electrode array, including remote
   electrodes.
 - Verification tests against the two-layer image series and the Lipschitz
