@@ -20,7 +20,7 @@ decisions are often made from resistivity images whose reliability is never
 quantified. ertkit therefore treats three things as part of every result rather
 than as optional extras:
 
-1. a data error model and a misfit target that follows from it (χ² = N);
+1. a data error model and a misfit target that follows from it ($\chi^2 = N_d$, the number of data);
 2. depth of investigation and sensitivity, used by default to mask the parts of
    a model that the data do not constrain;
 3. parameter uncertainty and, for VES, the range of equivalent models.
@@ -60,7 +60,7 @@ Each release must be complete, verified and reviewed before the next begins.
 | 0.0 Foundation | Repository standards (section 6), docs site skeleton, release pipeline. No PyPI upload. |
 | 0.1 VES | Layered-earth forward model, few-layer and smooth inversion, linearized uncertainty, equivalence analysis, CSV input. First PyPI release. |
 | 0.2 ERT forward | 2.5-D finite-element forward model, standard arrays, pseudosections. |
-| 0.3 ERT inversion | Gauss–Newton inversion with an error model and χ² target; adjoint sensitivities; optional blocky models. |
+| 0.3 ERT inversion | Gauss–Newton inversion with an error model and a $\chi^2$ target; adjoint sensitivities; optional blocky models. |
 | 0.4 Reliability | Depth-of-investigation index, cumulative sensitivity, linearized uncertainty maps, masking by default. |
 | 0.5 Field data | RES2DINV and pyGIMLi data formats, reciprocal-error analysis, one open field dataset end to end. |
 | 1.0 | Interface frozen, complete documentation, submission to the Journal of Open Source Software (JOSS). |
@@ -74,108 +74,144 @@ relations), which needs its own careful treatment of the clay ambiguity.
 
 ### 3.1 Forward model
 
-A layered earth has resistivities ρ₁, …, ρ_N and thicknesses h₁, …, h_{N−1};
-layer N is a half-space. The potential on the surface at distance r from a
-point current source I is
+A layered earth has resistivities $\rho_1, \dots, \rho_N$ and thicknesses
+$h_1, \dots, h_{N-1}$; layer $N$ is a half-space. The potential on the surface
+at distance $r$ from a point current source $I$ is
 
-    V(r) = (I / 2π) ∫₀^∞ T₁(λ) J₀(λr) dλ,
+$$
+V(r) = \frac{I}{2\pi} \int_0^\infty T_1(\lambda) \thinspace J_0(\lambda r) \thinspace d\lambda,
+$$
 
 where the resistivity transform follows the recurrence (Pekeris 1940;
 Koefoed 1979)
 
-    T_N(λ) = ρ_N,
-    T_i(λ) = [T_{i+1} + ρ_i tanh(λh_i)] / [1 + T_{i+1} tanh(λh_i) / ρ_i],
-             i = N−1, …, 1.
+$$
+T_N(\lambda) = \rho_N, \qquad T_i(\lambda) = \frac{T_{i+1}(\lambda) + \rho_i \tanh(\lambda h_i)}{1 + T_{i+1}(\lambda) \tanh(\lambda h_i)/\rho_i}, \qquad i = N-1, \dots, 1.
+$$
 
-For a homogeneous earth T₁ = ρ and V = Iρ / (2πr). The half-space part is
-subtracted analytically,
+For a homogeneous earth $T_1 = \rho$ and $V = I\rho/(2\pi r)$. The half-space
+part is subtracted analytically,
 
-    V(r) = Iρ₁ / (2πr) + (I / 2π) ∫₀^∞ [T₁(λ) − ρ₁] J₀(λr) dλ,
+$$
+V(r) = \frac{I\rho_1}{2\pi r} + \frac{I}{2\pi} \int_0^\infty \bigl[T_1(\lambda) - \rho_1\bigr] J_0(\lambda r) \thinspace d\lambda,
+$$
 
 so that the integrand decays exponentially. The remaining integral is evaluated
-with a published digital linear filter for J₀ (for example Key 2012, taken from
-libdlf). Each filter is first checked on analytic transform pairs, in
-particular the Lipschitz integral ∫₀^∞ e^{−aλ} J₀(λr) dλ = 1/√(a² + r²),
+with a published digital linear filter for $J_0$ (for example Key 2012, taken
+from libdlf). Each filter is first checked on analytic transform pairs, in
+particular the Lipschitz integral
+
+$$
+\int_0^\infty e^{-a\lambda} J_0(\lambda r) \thinspace d\lambda = \frac{1}{\sqrt{a^2 + r^2}},
+$$
+
 which is exactly the structure of the layered-earth kernel.
 
-For a collinear array with current electrodes A, B and potential electrodes
-M, N, the apparent resistivity is
+For a collinear array with current electrodes $A$, $B$ and potential electrodes
+$M$, $N$, the apparent resistivity is
 
-    ρ_a = K ΔV / I,  ΔV = V(AM) − V(BM) − V(AN) + V(BN),
-    K = 2π / (1/AM − 1/BM − 1/AN + 1/BN).
+$$
+\rho_a = K \frac{\Delta V}{I}, \qquad \Delta V = V(AM) - V(BM) - V(AN) + V(BN), \qquad K = \frac{2\pi}{1/AM - 1/BM - 1/AN + 1/BN}.
+$$
 
-This covers Schlumberger with finite MN, where K = π(s² − b²)/(2b) with
-s = AB/2 and b = MN/2, Wenner (K = 2πa), and any other collinear array.
+This covers Schlumberger with finite $MN$, where $K = \pi(s^2 - b^2)/(2b)$
+with $s = AB/2$ and $b = MN/2$, Wenner ($K = 2\pi a$), and any other
+collinear array.
 
 ### 3.2 Inversion
 
-Data are d_i = ln ρ_a,i with standard deviations from an error model
-σ(ρ_a) = relative · ρ_a + absolute (LaBrecque et al. 1996), converted to log
-space as σ_i / ρ_a,i. The misfit is χ² = Σ ((d_i − f_i(m)) / σ_i)², and a model
-that fits the data to the noise level has χ² ≈ N.
+Data are $d_i = \ln \rho_{a,i}$, with standard deviations from the error model
+$\sigma(\rho_a) = \text{relative} \cdot \rho_a + \text{absolute}$
+(LaBrecque et al. 1996), converted to log space as
+$\sigma_i = \sigma(\rho_{a,i})/\rho_{a,i}$. The misfit is
 
-- **Few-layer inversion.** Unknowns are m = (ln ρ_i, ln h_i). Minimize χ² by
-  Levenberg–Marquardt from several starting models (fixed seed), using the
-  analytic derivative of the recurrence, checked against finite differences.
-  Report the linearized covariance (JᵀW²J)⁻¹, standard deviations as
-  multiplicative factors, and the correlation matrix. A helper compares 2 to 6
-  layers using χ² and the Bayesian information criterion.
+$$
+\chi^2 = \sum_{i=1}^{N_d} \left( \frac{d_i - f_i(m)}{\sigma_i} \right)^2,
+$$
+
+and a model that fits the data to the noise level has
+$\chi^2 \approx N_d$, the number of data.
+
+- **Few-layer inversion.** The unknowns are
+  $m = (\ln \rho_i, \ln h_i)$. Minimize $\chi^2$ by Levenberg–Marquardt from
+  several starting models (fixed seed), using the analytic derivative of the
+  recurrence, checked against finite differences. Report the linearized
+  covariance $(J^T W^2 J)^{-1}$, standard deviations as multiplicative
+  factors, and the correlation matrix. A helper compares 2 to 6 layers using
+  $\chi^2$ and the Bayesian information criterion.
 - **Equivalence analysis.** A Metropolis sampler with fixed seed explores
-  models with posterior proportional to exp(−χ²/2) within user bounds. The
-  report gives the range of each ρ_i and h_i, and of the Dar Zarrouk parameters
-  S_i = h_i/ρ_i and T_i = h_i ρ_i (Maillet 1947), which expose the classic
-  equivalence of thin conductive and resistive layers. Several chains are run
-  and convergence is checked (acceptance rate, effective sample size, R̂).
+  models with posterior proportional to $\exp(-\chi^2/2)$ within user bounds.
+  The report gives the range of each $\rho_i$ and $h_i$, and of the Dar Zarrouk
+  parameters $S_i = h_i/\rho_i$ and $T_i = h_i \rho_i$ (Maillet 1947), which
+  expose the classic equivalence of thin conductive and resistive layers.
+  Several chains are run and convergence is checked (acceptance rate,
+  effective sample size, $\hat R$).
 - **Smooth (Occam) inversion.** Many thin layers with fixed, logarithmically
-  growing thicknesses; first-difference roughness on ln ρ; at each iteration
-  the regularization weight is chosen as the largest that still reduces χ²
-  toward its target N (Constable et al. 1987).
+  growing thicknesses and first-difference roughness on $\ln \rho$. At each
+  iteration the regularization weight is chosen as the largest that still
+  reduces $\chi^2$ toward its target $N_d$ (Constable et al. 1987).
 
 ### 3.3 Verification (acceptance criteria for 0.1)
 
-1. Homogeneous half-space: ρ_a = ρ to round-off for every array.
-2. Two-layer earth against the image series
-   V(r) = (Iρ₁ / 2πr)[1 + 2 Σ_{n≥1} kⁿ / √(1 + (2nh/r)²)], k = (ρ₂ − ρ₁)/(ρ₂ + ρ₁),
-   to a tolerance justified by the filter's measured accuracy on analytic pairs.
-3. Limits: ρ_a → ρ₁ at small spacing and ρ_a → ρ_N at large spacing.
+1. Homogeneous half-space: $\rho_a = \rho$ to round-off for every array.
+2. Two-layer earth against the image series below, to a tolerance justified by
+   the filter's measured accuracy on analytic pairs.
+3. Limits: $\rho_a \to \rho_1$ at small spacing and $\rho_a \to \rho_N$ at
+   large spacing.
 4. Jacobian: analytic derivative against finite differences.
 5. Recovery: synthetic three- and four-layer models (including a weathered and
    fractured basement profile typical of Nigeria's basement complex) recovered
    within their reported uncertainty.
-6. **Honest uncertainty.** Over many noise realizations, χ²/N averages about 1,
-   and the linearized 68% intervals contain the true parameters about 68% of
-   the time (within a stated statistical tolerance).
-7. Equivalence: for a thin conductive layer, the sampler finds S much better
-   determined than h and ρ separately.
+6. **Honest uncertainty.** Over many noise realizations, $\chi^2/N_d$ averages
+   about 1, and the linearized 68% intervals contain the true parameters about
+   68% of the time (within a stated statistical tolerance).
+7. Equivalence: for a thin conductive layer, the sampler finds $S$ much better
+   determined than $h$ and $\rho$ separately.
 8. Cross-check: forward responses agree with pyGIMLi's VES modelling.
+
+The two-layer image series, with reflection coefficient
+$k = (\rho_2 - \rho_1)/(\rho_2 + \rho_1)$ and first-layer thickness $h$, is
+
+$$
+V(r) = \frac{I\rho_1}{2\pi r} \left[ 1 + 2 \sum_{n=1}^{\infty} \frac{k^n}{\sqrt{1 + (2nh/r)^2}} \right].
+$$
 
 ## 4. Mathematics: 2.5-D ERT (releases 0.2 to 0.4)
 
 ### 4.1 Forward model
 
-The conductivity σ(x, z) varies along the profile (x) and with depth (z), but
-not along strike (y); electrodes are point sources on the surface. The cosine
-transform in y,
+The conductivity $\sigma(x, z)$ varies along the profile ($x$) and with depth
+($z$), but not along strike ($y$); electrodes are point sources on the surface.
+The cosine transform in $y$,
 
-    ũ(x, k, z) = ∫₀^∞ u(x, y, z) cos(ky) dy,  u(x, 0, z) = (2/π) ∫₀^∞ ũ dk,
+$$
+\tilde u(x, k, z) = \int_0^\infty u(x, y, z) \cos(ky) \thinspace dy, \qquad u(x, 0, z) = \frac{2}{\pi} \int_0^\infty \tilde u(x, k, z) \thinspace dk,
+$$
 
-turns the 3-D problem into a family of 2-D problems
-−∇·(σ∇ũ) + k²σũ = (source at the electrode), one per wavenumber k. For a
-homogeneous half-space ũ = (Iρ / 2π) K₀(kr), which fixes the source scaling and
-is the first verification target.
+turns the 3-D problem into a family of 2-D problems, one per wavenumber $k$:
 
-- **Boundary conditions.** No flux at the surface; on the sides and bottom the
-  mixed condition ∂ũ/∂n + k [K₁(kr)/K₀(kr)] cos θ ũ = 0, where θ is the angle
-  between the source direction and the outward normal (Dey and Morrison 1979).
-- **Wavenumber quadrature.** u ≈ Σ_j w_j ũ(k_j), with Gauss–Legendre nodes on
-  [0, k₀] and Gauss–Laguerre nodes beyond, k₀ scaled to the smallest electrode
-  spacing (Kemna 2000), or the optimized sets of Xu et al. (2000). The choice is
-  made by test: the quadrature applied to K₀ must reproduce 1/r to better than
-  0.1% over the survey's range of r.
-- **Singularity removal.** ũ = ũ_p + ũ_s, with ũ_p the analytic half-space
-  solution for the conductivity σ₀ at the source; the secondary part solves
-  −∇·(σ∇ũ_s) + k²σũ_s = ∇·((σ − σ₀)∇ũ_p) − k²(σ − σ₀)ũ_p, which has no point
-  singularity (Lowry et al. 1989; Zhao and Yedlin 1996).
+$$
+-\nabla \cdot (\sigma \nabla \tilde u) + k^2 \sigma \tilde u = \text{(source at the electrode)}.
+$$
+
+For a homogeneous half-space $\tilde u = (I\rho/2\pi) K_0(kr)$, which fixes the
+source scaling and is the first verification target.
+
+- **Boundary conditions.** There is no flux through the surface. On the sides
+  and bottom the mixed condition of Dey and Morrison (1979) applies,
+  $\partial \tilde u/\partial n + k \thinspace [K_1(kr)/K_0(kr)] \cos\theta \thinspace \tilde u = 0$,
+  where $\theta$ is the angle between the source direction and the outward
+  normal.
+- **Wavenumber quadrature.** The inverse transform is approximated as
+  $u \approx \sum_j w_j \tilde u(k_j)$, with Gauss–Legendre nodes on
+  $[0, k_0]$ and Gauss–Laguerre nodes beyond, and $k_0$ scaled to the smallest
+  electrode spacing (Kemna 2000), or the optimized sets of Xu et al. (2000).
+  The choice is made by test: the quadrature applied to $K_0$ must reproduce
+  $1/r$ to better than 0.1% over the survey's range of $r$.
+- **Singularity removal.** Write $\tilde u = \tilde u_p + \tilde u_s$, with
+  $\tilde u_p$ the analytic half-space solution for the conductivity
+  $\sigma_0$ at the source. The secondary part solves the equation below,
+  which has no point singularity (Lowry et al. 1989; Zhao and Yedlin 1996).
 - **Discretization.** P1 finite elements on a structured, graded triangular
   mesh: electrodes on nodes, fine cells under the profile, geometric growth into
   padding several profile lengths wide and deep. Inversion parameters are the
@@ -187,41 +223,55 @@ is the first verification target.
   arbitrary ABMN tables; analytic geometric factors; pseudosections plotted at
   the median depths of investigation of Edwards (1977).
 
+The secondary potential of the singularity removal satisfies
+
+$$
+-\nabla \cdot (\sigma \nabla \tilde u_s) + k^2 \sigma \tilde u_s = \nabla \cdot \bigl((\sigma - \sigma_0) \nabla \tilde u_p\bigr) - k^2 (\sigma - \sigma_0) \tilde u_p.
+$$
+
 ### 4.2 Inversion
 
-Unknowns m = ln ρ on parameter cells; data d = ln ρ_a with the error model of
-section 3.2. Minimize
+The unknowns are $m = \ln \rho$ on the parameter cells, and the data
+$d = \ln \rho_a$ with the error model of section 3.2. Minimize
 
-    Φ(m) = ‖W_d (d − f(m))‖² + λ ‖W_m (m − m_ref)‖²,
+$$
+\Phi(m) = \lVert W_d (d - f(m)) \rVert^2 + \lambda \lVert W_m (m - m_{\mathrm{ref}}) \rVert^2,
+$$
 
-with W_m combining a small smallness term and anisotropic first differences
+with $W_m$ combining a small smallness term and anisotropic first differences
 (separate horizontal and vertical weights). Gauss–Newton steps are computed
-with preconditioned conjugate gradients and a backtracking line search; λ is
-reduced (cooling) until χ² reaches N. The result object records why the
-iteration stopped.
+with preconditioned conjugate gradients and a backtracking line search;
+$\lambda$ is reduced (cooling) until $\chi^2$ reaches $N_d$. The result object
+records why the iteration stopped.
 
-Sensitivities come from the adjoint (reciprocity) formula, for each wavenumber
-∂ũ_AM/∂σ_e = −∫_e (∇ũ_A·∇ũ_M + k² ũ_A ũ_M) dΩ, integrated with the same
-quadrature and chained to ln ρ_a and ln ρ; they are checked against finite
-differences. Optional L1 measures of misfit (robust to outliers) and of model
-gradients (blocky models) use iteratively reweighted least squares
-(Farquharson and Oldenburg 1998).
+Sensitivities come from the adjoint (reciprocity) formula, for each
+wavenumber
+
+$$
+\frac{\partial \tilde u_{AM}}{\partial \sigma_e} = -\int_{\Omega_e} \bigl( \nabla \tilde u_A \cdot \nabla \tilde u_M + k^2 \tilde u_A \tilde u_M \bigr) \thinspace d\Omega,
+$$
+
+integrated with the same quadrature and chained to $\ln \rho_a$ and
+$\ln \rho$; they are checked against finite differences. Optional L1 measures
+of misfit (robust to outliers) and of model gradients (blocky models) use
+iteratively reweighted least squares (Farquharson and Oldenburg 1998).
 
 ### 4.3 Reliability (0.4)
 
-- **Depth-of-investigation index** (Oldenburg and Li 1999): two inversions with
-  different reference models give R = (m₁ − m₂)/(m_ref,1 − m_ref,2); cells
-  with R above a threshold (default 0.1) are masked in plots unless the user
+- **Depth-of-investigation index** (Oldenburg and Li 1999). Two inversions
+  with different reference models give
+  $R = (m_1 - m_2)/(m_{\mathrm{ref},1} - m_{\mathrm{ref},2})$; cells with
+  $R$ above a threshold (default 0.1) are masked in plots unless the user
   turns masking off.
 - **Cumulative sensitivity**, weighted by data errors and normalized by cell
   area.
-- **Linearized uncertainty**: the diagonal of the posterior covariance, computed
-  directly for models of a few thousand cells.
+- **Linearized uncertainty**: the diagonal of the posterior covariance,
+  computed directly for models of a few thousand cells.
 
 ### 4.4 Verification (acceptance criteria for 0.2 to 0.4)
 
-1. Quadrature reproduces 1/r from K₀ to better than 0.1%.
-2. Homogeneous half-space: ρ_a = ρ within 0.5% for every array.
+1. Quadrature reproduces $1/r$ from $K_0$ to better than 0.1%.
+2. Homogeneous half-space: $\rho_a = \rho$ within 0.5% for every array.
 3. Layered earth: 2.5-D results agree with the VES module of release 0.1.
 4. Vertical contact: agreement with the analytic image solution
    (Telford et al. 1990).
@@ -255,7 +305,7 @@ src/ertkit/
 ### 5.2 Principles
 
 - Small immutable dataclasses for inputs (models, surveys, error models) and a
-  result object for every inversion (model, predicted data, χ² history, λ
+  result object for every inversion (model, predicted data, $\chi^2$ history, λ
   history, iterations, convergence flag and message, uncertainty).
 - SI units throughout (Ω·m, m, A, V), stated in every docstring.
 - Every random function takes a `seed` or numpy `Generator`.
