@@ -31,14 +31,36 @@ class Sounding:
         Electrode half-spacings of the readings.
     rhoa : array_like
         Apparent resistivity in ohm meters, one value per reading.
-    error : ErrorModel, optional
-        Measurement-error model. Default ``ErrorModel()`` (3% relative).
+    error : ErrorModel or None, optional
+        Measurement-error model. Default (or None): ``ErrorModel()``, 3%
+        relative.
 
     Raises
     ------
+    TypeError
+        If ``survey`` or ``error`` has the wrong type.
     ValueError
         If ``rhoa`` does not have one finite value per reading, or if no
         reading is usable.
+
+    Warns
+    -----
+    DataWarning
+        If readings are removed.
+
+    Notes
+    -----
+    The data weights use the observed transfer resistances, while
+    :meth:`synthetic` draws noise with standard deviations computed from the
+    noise-free ones; with an absolute error part, readings that happen to come
+    out low are therefore weighted slightly less.
+
+    Examples
+    --------
+    >>> from ertkit.ves import Sounding, Survey
+    >>> survey = Survey.schlumberger(ab2=[3.0, 10.0, 30.0], mn2=0.5)
+    >>> Sounding(survey=survey, rhoa=[120.0, 80.0, 150.0]).n_data
+    3
     """
 
     survey: Survey
@@ -46,6 +68,17 @@ class Sounding:
     error: ErrorModel = field(default_factory=ErrorModel)
 
     def __post_init__(self) -> None:
+        # Checked through plain objects: callers may pass anything at runtime.
+        survey_obj: object = self.survey
+        error_obj: object = self.error
+        if not isinstance(survey_obj, Survey):
+            raise TypeError(f"survey must be a Survey, got {type(survey_obj).__name__}")
+        if error_obj is None:
+            object.__setattr__(self, "error", ErrorModel())
+        elif not isinstance(error_obj, ErrorModel):
+            raise TypeError(
+                f"error must be an ErrorModel, got {type(error_obj).__name__}"
+            )
         rhoa = np.array(self.rhoa, dtype=np.float64, copy=True, ndmin=1)
         if rhoa.shape != (self.survey.n_readings,):
             raise ValueError(

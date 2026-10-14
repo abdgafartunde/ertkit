@@ -56,6 +56,14 @@ class TestSounding:
         assert data.n_data == SURVEY.n_readings - 2
         assert not np.isin(SURVEY.ab2[[3, 10]], data.survey.ab2).any()
 
+    def test_error_model_defaults_and_types(self) -> None:
+        rhoa = forward(MODEL, SURVEY)
+        assert Sounding(survey=SURVEY, rhoa=rhoa, error=None).error == ErrorModel()  # type: ignore[arg-type]
+        with pytest.raises(TypeError, match="ErrorModel"):
+            Sounding(survey=SURVEY, rhoa=rhoa, error=0.03)  # type: ignore[arg-type]
+        with pytest.raises(TypeError, match="Survey"):
+            Sounding(survey=SURVEY.ab2, rhoa=rhoa)  # type: ignore[arg-type]
+
     def test_read_only(self) -> None:
         data = Sounding(survey=SURVEY, rhoa=forward(MODEL, SURVEY))
         with pytest.raises(ValueError, match="read-only"):
@@ -94,6 +102,12 @@ class TestCsv:
         k = Survey(ab2=[3.0, 10.0], mn2=[0.5, 1.0]).geometric_factor
         np.testing.assert_allclose(data.rhoa, [10.0, 0.5] * k)
 
+    def test_byte_order_mark_and_semicolons(self, tmp_path: Path) -> None:
+        # Spreadsheet programs write a byte-order mark; European ones use semicolons.
+        path = tmp_path / "excel.csv"
+        path.write_bytes("\ufeff# exported\nab2;mn2;rhoa\n3.0;0.5;100.0\n".encode())
+        assert read_csv(path).rhoa[0] == 100.0
+
     def test_other_encodings(self, tmp_path: Path) -> None:
         path = tmp_path / "latin1.csv"
         path.write_bytes(
@@ -111,7 +125,11 @@ class TestCsv:
             ("", "no header"),
             ("ab2,rhoa\n3,100\n", "missing column 'mn2'"),
             ("ab2,mn2\n3,0.5\n", "'rhoa' or a 'resistance'"),
-            ("ab2,mn2,rhoa\n3,0.5,abc\n", "must be a number"),
+            ("ab2,mn2,rhoa\n3,0.5,abc\n", "line 2: could not convert"),
+            ("ab2,mn2,rhoa\n3,0.5\n", "line 2: too few columns"),
+            ("ab2;mn2;rhoa\n3,0;0,5;100\n", "decimal point"),
+            ("ab2,AB2,mn2,rhoa\n3,3,0.5,100\n", "duplicate columns"),
+            ("ab2,mn2,rhoa\n3,0.5,nan\n", "line 2: values must be finite"),
         ],
     )
     def test_errors(self, tmp_path: Path, text: str, match: str) -> None:

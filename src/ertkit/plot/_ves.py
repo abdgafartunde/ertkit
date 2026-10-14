@@ -12,7 +12,7 @@ from ertkit.results import InversionResult
 from ertkit.ves.data import Sounding
 from ertkit.ves.invert import LayerFit, _segments
 from ertkit.ves.model import LayeredModel
-from ertkit.ves.smooth import SmoothFit
+from ertkit.ves.smooth import DOI_THRESHOLD, SmoothFit
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
@@ -63,7 +63,9 @@ def sounding(
     for fit, label in zip(fits, labels, strict=True):
         color = None
         for k in np.unique(segment):
-            sel = segment == k
+            # Readings of one MN segment, in order of AB/2.
+            sel = np.flatnonzero(segment == k)
+            sel = sel[np.argsort(ab2[sel], kind="stable")]
             (line,) = ax.plot(
                 ab2[sel],
                 fit.predicted[sel],
@@ -177,7 +179,8 @@ def layered_model(
                 ax.errorbar(
                     np.sqrt(model.resistivity[:-1] * model.resistivity[1:]),
                     model.depths,
-                    yerr=item.depth_std,
+                    # Error bars stop at the surface.
+                    yerr=[np.minimum(item.depth_std, model.depths), item.depth_std],
                     fmt="none",
                     color=line.get_color(),
                     capsize=3,
@@ -194,6 +197,18 @@ def layered_model(
                 alpha=0.12,
                 label=f"below depth of investigation ({label})",
             )
+            # Isolated layers above the depth of investigation whose index
+            # also reaches the threshold are unresolved too.
+            tops = np.concatenate([[0.0], model.depths])
+            bottoms = np.concatenate([model.depths, [depth_max]])
+            for j in np.flatnonzero(item.doi_index >= DOI_THRESHOLD):
+                if bottoms[j] <= item.doi:
+                    ax.axhspan(
+                        max(tops[j], depth_min),
+                        bottoms[j],
+                        color=line.get_color(),
+                        alpha=0.12,
+                    )
     ax.set_xscale("log")
     if log_depth:
         ax.set_yscale("log")

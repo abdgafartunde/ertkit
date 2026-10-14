@@ -9,8 +9,10 @@ current :math:`I` is
 
 where :math:`\mathcal{T}_1` is the resistivity transform of the layered earth
 (Pekeris 1940; Koefoed 1979). The integral is evaluated with the 120-point
-digital linear filter of Guptasarma and Singh (1997), taken from libdlf (filter
-values licensed CC BY 4.0).
+digital linear filter of Guptasarma and Singh (1997), taken from libdlf
+(https://github.com/emsig/libdlf; filter values licensed CC BY 4.0). Its
+relative error is below about 1e-6 for resistivity contrasts up to 1e4 between
+layers, and grows in proportion to the contrast beyond that.
 
 The functions here accept complex resistivities and thicknesses, so that
 derivatives can be computed by the complex-step method.
@@ -85,6 +87,11 @@ def resistivity_transform(
     rho = np.asarray(resistivity)
     h = np.asarray(thickness)
     lam = np.asarray(lam)
+    if rho.ndim != 1 or h.shape != (rho.size - 1,):
+        raise ValueError(
+            f"need {rho.size - 1} thicknesses for {rho.size} resistivities, "
+            f"got shape {h.shape}"
+        )
     out = np.broadcast_to(rho[-1], lam.shape).astype(np.result_type(lam, rho, h, 1.0))
     for i in range(rho.size - 2, -1, -1):
         t = _tanh(lam * h[i])
@@ -122,6 +129,8 @@ def hankel_j0(
     """
     base, weights = _filter()
     r = np.atleast_1d(np.asarray(r, dtype=np.float64))
+    if r.ndim != 1 or np.any(~(r > 0)) or not np.all(np.isfinite(r)):
+        raise ValueError("distances must be a one-dimensional array of positive values")
     lam = base[np.newaxis, :] / r[:, np.newaxis]
     values = np.asarray(kernel(lam))
     # An explicit sum rather than a matrix product: some BLAS builds (Accelerate

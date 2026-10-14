@@ -7,10 +7,11 @@ from ertkit.ves.forward import forward, hankel_j0, potential, resistivity_transf
 from ertkit.ves.invert import LayerFit, invert_few_layer
 from ertkit.ves.io import read_csv, write_csv
 from ertkit.ves.model import LayeredModel
-from ertkit.ves.smooth import SmoothFit, invert_smooth
+from ertkit.ves.smooth import DOI_THRESHOLD, SmoothFit, invert_smooth
 from ertkit.ves.survey import Survey
 
 __all__ = [
+    "DOI_THRESHOLD",
     "LayerFit",
     "LayeredModel",
     "SmoothFit",

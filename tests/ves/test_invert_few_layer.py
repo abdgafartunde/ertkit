@@ -93,7 +93,10 @@ def test_honest_uncertainty(verification: Verification) -> None:
     dof = survey.n_readings - p
     # With this seed the mean chi2 is 2.7 standard errors below N - p, inside
     # the 3-standard-error band. It is not a bias: 3000 draws with another seed
-    # give 22.97 +/- 0.12 for N - p = 23.
+    # give 22.97 +/- 0.12 for N - p = 23, and ten independent runs of 1000 draws
+    # give 22.87 +/- 0.07. With seven checks at three standard errors each,
+    # a run with a fresh seed would fail by chance about 1 to 2% of the time,
+    # so the seed is fixed.
     rng = np.random.default_rng(20261014)
     truth = _log_params(model)
     chi2, inside, mahalanobis, worst_std = [], [], [], 0.0
@@ -193,6 +196,19 @@ def test_result_contents() -> None:
     assert 0.0 < fit.chi2_ratio < 3.0
 
 
+def test_result_arrays_are_read_only() -> None:
+    fit = invert_few_layer(_noisy(DESIGN_MODEL, DESIGN_SURVEY, EPS_DESIGN), 3, rng=0)
+    for array in (
+        fit.predicted,
+        fit.std_log,
+        fit.covariance,
+        fit.depths,
+        fit.depth_std,
+    ):
+        with pytest.raises(ValueError, match="read-only"):
+            array[0] = 0.0
+
+
 def test_unresolved_layer_is_flagged() -> None:
     survey = Survey.schlumberger(ab2=np.geomspace(1.0, 300.0, 20), mn2=0.5)
     half_space = LayeredModel(resistivity=[100.0], thickness=[])
@@ -213,7 +229,7 @@ def test_warns_when_no_start_converges(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(invert_module.optimize, "least_squares", one_step)
     data = _noisy(DESIGN_MODEL, DESIGN_SURVEY, EPS_DESIGN)
-    with pytest.warns(ConvergenceWarning, match="no starting model converged"):
+    with pytest.warns(ConvergenceWarning, match="did not converge"):
         fit = invert_few_layer(data, 3, n_starts=2, rng=0)
     assert not fit.converged
 
@@ -231,6 +247,7 @@ def test_poor_fit_warns() -> None:
     ("kwargs", "match"),
     [
         ({"n_layers": 0}, "at least 1"),
+        ({"n_layers": 3, "n_starts": 0}, "n_starts must be at least 1"),
         ({"n_layers": 12}, "cannot determine"),
         ({"n_layers": 2, "start": DESIGN_MODEL}, "start has 3 layers"),
     ],

@@ -19,7 +19,7 @@ def read_csv(
     path: str | os.PathLike[str],
     error: ErrorModel | None = None,
     *,
-    encoding: str = "utf-8",
+    encoding: str = "utf-8-sig",
 ) -> Sounding:
     """Read a sounding from a CSV file.
 
@@ -27,7 +27,8 @@ def read_csv(
     case sensitive. Required columns are ``ab2`` and ``mn2`` (half-spacings in
     meters) and either ``rhoa`` (apparent resistivity in ohm meters) or
     ``resistance`` (transfer resistance in ohms). Lines starting with ``#``
-    are comments. Other columns are ignored.
+    are comments, and other columns are ignored. Columns may be separated by
+    commas, semicolons or tabs; numbers must use a decimal point.
 
     Parameters
     ----------
@@ -36,8 +37,10 @@ def read_csv(
     error : ErrorModel, optional
         Error model for the data. Default ``ErrorModel()``.
     encoding : str, optional
-        Text encoding of the file. Default ``"utf-8"``; files exported by
-        some instruments need, for example, ``"latin-1"``.
+        Text encoding of the file. The default, ``"utf-8-sig"``, reads UTF-8
+        files with or without the byte-order mark that spreadsheet programs
+        write; files exported by some instruments need, for example,
+        ``"latin-1"``.
 
     Returns
     -------
@@ -46,7 +49,15 @@ def read_csv(
     Raises
     ------
     ValueError
-        If a required column is missing or a value is not a number.
+        If the header is missing or has duplicate or missing columns, if a
+        value is not a number (the message gives the line), or if the
+        spacings are invalid (``MN/2`` must be smaller than ``AB/2``) or no
+        reading is usable.
+
+    Warns
+    -----
+    DataWarning
+        If readings are removed (see :class:`Sounding`).
 
     Examples
     --------
@@ -54,39 +65,65 @@ def read_csv(
 
         # Site 12, Minna
         ab2,mn2,rhoa
-        1.5,0.5,120.3
-        2.5,0.5,98.7
+        1.5,0.3,120.3
+        2.5,0.3,98.7
 
     is read with ``read_csv("site12.csv")``.
     """
     with Path(path).open(encoding=encoding, newline="") as handle:
-        lines = [
-            line
-            for line in handle
-            if line.strip() and not line.lstrip().startswith("#")
+        numbered = [
+            (number, line.lstrip("\ufeff"))
+            for number, line in enumerate(handle, start=1)
+            if line.strip() and not line.lstrip("\ufeff").lstrip().startswith("#")
         ]
-    reader = csv.DictReader(lines)
-    if reader.fieldnames is None:
+    if not numbered:
         raise ValueError(f"{path}: no header row")
-    names = {name.strip().lower(): name for name in reader.fieldnames}
+    try:
+        delimiter = csv.Sniffer().sniff(numbered[0][1], delimiters=",;\t").delimiter
+    except csv.Error:
+        delimiter = ","
+    rows = list(csv.reader([line for _, line in numbered], delimiter=delimiter))
+    header = [name.strip().lower() for name in rows[0]]
+    duplicated = sorted({name for name in header if name and header.count(name) > 1})
+    if duplicated:
+        raise ValueError(f"{path}: duplicate columns {duplicated}")
+    names = {name: k for k, name in enumerate(header)}
     for required in ("ab2", "mn2"):
         if required not in names:
-            raise ValueError(f"{path}: missing column {required!r}")
+            raise ValueError(
+                f"{path}: missing column {required!r} (columns found: {header})"
+            )
     if "rhoa" in names:
         value_col, is_resistance = names["rhoa"], False
     elif "resistance" in names:
         value_col, is_resistance = names["resistance"], True
     else:
         raise ValueError(f"{path}: need a 'rhoa' or a 'resistance' column")
-    rows = list(reader)
-    try:
-        ab2 = np.array([float(row[names["ab2"]]) for row in rows])
-        mn2 = np.array([float(row[names["mn2"]]) for row in rows])
-        values = np.array([float(row[value_col]) for row in rows])
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{path}: every value must be a number ({exc})") from exc
-    survey = Survey(ab2=ab2, mn2=mn2)
-    rhoa = values * survey.geometric_factor if is_resistance else values
+    columns = (names["ab2"], names["mn2"], value_col)
+    ab2, mn2, values = [], [], []
+    for (number, _), row in zip(numbered[1:], rows[1:], strict=True):
+        if len(row) <= max(columns):
+            raise ValueError(f"{path}, line {number}: too few columns")
+        try:
+            a, m, v = (float(row[c]) for c in columns)
+        except ValueError as exc:
+            hint = (
+                " (numbers must use a decimal point, not a comma)"
+                if any("," in cell for cell in row)
+                else ""
+            )
+            raise ValueError(f"{path}, line {number}: {exc}{hint}") from exc
+        if not all(np.isfinite([a, m, v])):
+            raise ValueError(f"{path}, line {number}: values must be finite")
+        ab2.append(a)
+        mn2.append(m)
+        values.append(v)
+    survey = Survey(ab2=np.array(ab2), mn2=np.array(mn2))
+    rhoa = (
+        np.array(values) * survey.geometric_factor
+        if is_resistance
+        else np.array(values)
+    )
     return Sounding(
         survey=survey, rhoa=rhoa, error=ErrorModel() if error is None else error
     )

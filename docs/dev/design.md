@@ -134,9 +134,10 @@ $$
 For a homogeneous earth $\mathcal{T}_1 = \rho$ and $V = I\rho/(2\pi r)$. The
 integral is evaluated with a digital linear filter for $J_0$ (Ghosh 1971).
 The default is the 120-point filter of Guptasarma and Singh (1997), taken from
-libdlf, because it is accurate across the resistivity contrasts met in
-practice: filters designed for controlled-source electromagnetics, such as
-Key (2012), lose accuracy at high contrast. Subtracting the half-space part,
+libdlf, because its relative error stays below about $10^{-6}$ for
+resistivity contrasts up to $10^4$ between layers (it grows in proportion to
+the contrast beyond that), whereas filters designed for controlled-source
+electromagnetics, such as Key (2012), lose accuracy at high contrast. Subtracting the half-space part,
 
 $$
 V(r) = \frac{I\rho_1}{2\pi r} + \frac{I}{2\pi} \int_0^\infty \bigl[\mathcal{T}_1(\lambda) - \rho_1\bigr] J_0(\lambda r) \thinspace d\lambda,
@@ -154,7 +155,8 @@ $$
 
 This covers Schlumberger soundings with finite $MN$, where
 $K = \pi(s_{AB}^2 - b^2)/(2b)$ with $s_{AB} = AB/2$ and $b = MN/2$, Wenner
-soundings ($K = 2\pi a$), and any other collinear array. Field Schlumberger
+soundings ($K = 2\pi a$); release 0.1 supports these symmetric arrays, and
+the formula covers any other collinear array for later releases. Field Schlumberger
 soundings change $MN$ partway, with overlapping readings: $AB/2$ and $MN/2$
 are stored for every reading, and an optional static-shift factor per $MN$
 segment can be estimated with the model.
@@ -208,12 +210,22 @@ $\chi^2 = N_d$.
   model itself,
   $m_{k+1}(\mu) = \bigl[\mu \partial^T \partial + (WJ)^T WJ\bigr]^{-1} (WJ)^T W \hat d$
   with $\hat d = d - f(m_k) + J m_k$. While the target $\chi^2 = N_d$ cannot
-  be reached, $\mu$ minimizes the nonlinear $\chi^2$; once it can, $\mu$ is
-  the largest value with $\chi^2 = N_d$. The result includes the sensitivity
-  of the data to each layer and a 1-D depth of investigation by the method of
-  Oldenburg and Li (1999), as in section 4.3, using the magnitude of the index:
-  near the transition the two reference models can overshoot in opposite
-  directions, which makes the index negative there.
+  be reached, $\mu$ minimizes the nonlinear $\chi^2$ and only steps that
+  reduce it are accepted (halving otherwise); if the target stays out of
+  reach, the best model is returned with a warning that the errors may be
+  underestimated. Once the target can be reached, $\mu$ is the largest value
+  with $\chi^2 = N_d$. The result includes the sensitivity of the data to
+  each layer and a 1-D depth of investigation by the method of Oldenburg and
+  Li (1999), as in section 4.3, with two differences. The magnitude of the
+  index is used, since near the transition the two reference models can
+  overshoot in opposite directions and make the index negative. The depth of
+  investigation is the shallowest depth from which the rescaled index stays at
+  or above 0.1 over at least a factor of 1.5 in depth: the first crossing
+  alone is fragile (an isolated layer can fluctuate above 0.1), while the
+  depth below which the index never returns under 0.1 is overconfident (a
+  single dip pushes it far down). Plots also shade isolated layers above it. When
+  the index at the bottom is 0.2 or less, VES reports no depth of
+  investigation and warns, rather than using ramp reference models.
 
 ### 3.4 Equivalence and number of layers (0.2)
 
