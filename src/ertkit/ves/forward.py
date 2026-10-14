@@ -39,6 +39,20 @@ def _filter() -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     return np.asarray(base, dtype=np.float64), np.asarray(weights, dtype=np.float64)
 
 
+def _tanh(z: NDArray[Any]) -> NDArray[Any]:
+    """Hyperbolic tangent that is safe for complex arguments with Re(z) >= 0.
+
+    numpy's complex ``tanh`` overflows for large real parts on some platforms
+    (Windows). Since :math:`\\lambda h` always has a positive real part here,
+    :math:`\\tanh z = -\\operatorname{expm1}(-2z)/(2 + \\operatorname{expm1}(-2z))`,
+    which cannot overflow, is used for complex input.
+    """
+    if not np.iscomplexobj(z):
+        return np.tanh(z)
+    em = np.expm1(-2.0 * z)
+    return np.asarray(-em / (2.0 + em))
+
+
 def resistivity_transform(
     lam: ArrayLike, resistivity: ArrayLike, thickness: ArrayLike
 ) -> NDArray[Any]:
@@ -73,7 +87,7 @@ def resistivity_transform(
     lam = np.asarray(lam)
     out = np.broadcast_to(rho[-1], lam.shape).astype(np.result_type(lam, rho, h, 1.0))
     for i in range(rho.size - 2, -1, -1):
-        t = np.tanh(lam * h[i])
+        t = _tanh(lam * h[i])
         out = (out + rho[i] * t) / (1.0 + out * t / rho[i])
     return out
 
@@ -110,7 +124,9 @@ def hankel_j0(
     r = np.atleast_1d(np.asarray(r, dtype=np.float64))
     lam = base[np.newaxis, :] / r[:, np.newaxis]
     values = np.asarray(kernel(lam))
-    return np.asarray(values @ weights / r)
+    # An explicit sum rather than a matrix product: some BLAS builds (Accelerate
+    # with numpy 2.0) raise spurious floating-point warnings in matmul.
+    return np.asarray((values * weights).sum(axis=-1) / r)
 
 
 def _rhoa(

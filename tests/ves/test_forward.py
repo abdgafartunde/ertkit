@@ -10,7 +10,7 @@ from hypothesis import strategies as st
 from verification_report import Verification
 
 from ertkit.ves import LayeredModel, Survey, forward, hankel_j0, potential
-from ertkit.ves.forward import _rhoa
+from ertkit.ves.forward import _rhoa, _tanh
 
 CONTRASTS = [1e-3, 1e-2, 1e-1, 1e1, 1e2, 1e3]  # rho2 / rho1, capped at 1000
 R_OVER_H = np.geomspace(0.1, 100.0, 41)
@@ -144,6 +144,17 @@ def test_complex_step_matches_finite_differences(verification: Verification) -> 
         1e-6,
         "central differences at their optimal step are accurate to about 1e-7; the "
         "complex-step derivative is exact to round-off",
+    )
+
+
+def test_complex_tanh_is_finite_for_large_arguments() -> None:
+    # numpy's complex tanh overflows on Windows; the transform must not.
+    z = np.geomspace(1e-9, 1e5, 500) + 1e-30j
+    t = _tanh(z)
+    assert np.all(np.isfinite(t))
+    np.testing.assert_allclose(t.real, np.tanh(z.real), rtol=1e-15)
+    np.testing.assert_allclose(
+        t.imag / 1e-30, 1 / np.cosh(np.minimum(z.real, 350)) ** 2, atol=1e-15
     )
 
 
