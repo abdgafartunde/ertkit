@@ -532,7 +532,7 @@ requires-dist = [
     { name = "libdlf", specifier = ">=0.3" },
     { name = "matplotlib", marker = "extra == 'plot'", specifier = ">=3.10" },
     { name = "numpy", specifier = ">=2.0" },
-    { name = "scipy", specifier = ">=1.15" },
+    { name = "scipy", specifier = ">=1.16" },
 ]
 provides-extras = ["plot"]
 

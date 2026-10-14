@@ -25,6 +25,15 @@ project uses [semantic versioning](https://semver.org/).
   `Sounding.synthetic`, and CSV input and output with `ves.read_csv` and
   `ves.write_csv` (explicit text encoding).
 - Warning categories `ConvergenceWarning` and `DataWarning`.
+- Few-layer VES inversion, `ves.invert_few_layer`: log parameters, a
+  trust-region least-squares search from several starting models within
+  resolvable bounds, complex-step Jacobian, linearized uncertainty
+  (standard deviations, multiplicative factors, correlations, depths with
+  standard deviations), a goodness-of-fit p-value, optional static-shift
+  factors per MN segment, and warnings for poor fits and unresolved
+  parameters. Results are `ves.LayerFit` objects.
+- An honest-uncertainty test: over 1000 noise draws, the misfit and the
+  coverage of the linearized intervals match their theoretical values.
 - `arrays.geometric_factor` for any four-electrode array, including remote
   electrodes.
 - Verification tests against the two-layer image series and the Lipschitz

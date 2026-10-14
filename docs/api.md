@@ -13,6 +13,7 @@ between minor releases; the [changelog](changelog.md) records every change.
    ErrorModel
    ConvergenceWarning
    DataWarning
+   results.InversionResult
 ```
 
 ## Vertical electrical sounding
@@ -28,6 +29,8 @@ between minor releases; the [changelog](changelog.md) records every change.
    Sounding
    read_csv
    write_csv
+   invert_few_layer
+   LayerFit
    forward
    potential
    resistivity_transform
