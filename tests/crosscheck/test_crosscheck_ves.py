@@ -63,8 +63,9 @@ def test_against_pygimli(verification: Verification, name: str) -> None:
     verification.check(
         f"pyGIMLi VES modeling, {name}: max relative difference in rho_a",
         float(np.max(np.abs(theirs / ours - 1))),
-        1e-3,
-        "design gate of 0.1%: two independent codes with different Hankel filters",
+        1e-5,
+        "independent codes with different Hankel filters; each filter is accurate "
+        "to about 1e-6 on these models (first weekly run: at most 1.5e-6)",
     )
 
 
