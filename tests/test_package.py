@@ -54,7 +54,10 @@ def test_readme_quick_start_output_is_current() -> None:
     shown = readme.split("The first `print` shows:", 1)[1].split("```text\n", 1)[1]
     shown = shown.split("```", 1)[0]
     printed = subprocess.run(
-        [sys.executable, "-c", code], check=True, capture_output=True, text=True
+        [sys.executable, "-c", code],
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
     ).stdout
     printed = printed[: printed.index("depth of investigation")]
     number = r"-?\d+(?:\.\d+)?(?:e[+-]\d+)?"

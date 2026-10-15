@@ -112,7 +112,9 @@ class TestCsv:
 
     def test_empty_spreadsheet_rows_are_skipped(self, tmp_path: Path) -> None:
         path = tmp_path / "excel.csv"
-        path.write_text("ab2,mn2,rhoa\n3.0,0.5,100.0\n,,\n10.0,0.5,80.0\n,,\n")
+        path.write_text(
+            "ab2,mn2,rhoa\n3.0,0.5,100.0\n,,\n10.0,0.5,80.0\n,,\n", encoding="utf-8"
+        )
         np.testing.assert_array_equal(read_csv(path).rhoa, [100.0, 80.0])
 
     def test_other_encodings(self, tmp_path: Path) -> None:
