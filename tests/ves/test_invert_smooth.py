@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from scipy import optimize
 from verification_report import Verification
 
 from ertkit import ConvergenceWarning, DataWarning, ErrorModel
 from ertkit._linalg import matmul
 from ertkit.ves import LayeredModel, Sounding, Survey, forward
 from ertkit.ves.smooth import (
+    _REFIT_FACTOR,
+    _TARGET_RELAXED,
     DOI_THRESHOLD,
-    TARGET_UNREACHABLE,
     SmoothFit,
     _layer_thicknesses,
     _Occam,
@@ -38,11 +40,12 @@ def test_occam_reaches_the_target_misfit(
 ) -> None:
     assert fit.converged
     verification.check(
-        "Occam: |final chi2 - N_d| / sqrt(2 N_d)",
-        abs(fit.chi2 - fit.n_data) / np.sqrt(2 * fit.n_data),
-        1.0,
-        "the final misfit must lie within one standard deviation of chi-squared "
-        "with N_d degrees of freedom of its target N_d",
+        "Occam: |final chi2 - target| / target",
+        abs(fit.chi2 - fit.chi2_target) / fit.chi2_target,
+        0.01,
+        "mu is found by root finding on chi2(mu) = target (N_d, or 1.1 times the "
+        "smallest misfit when N_d is out of reach), so the final misfit must match "
+        "it closely",
     )
 
 
@@ -79,17 +82,56 @@ def test_smooth_model_follows_the_layers(fit: SmoothFit) -> None:
     assert fit.model.resistivity[-1] > 1000.0  # resistive basement
 
 
+def _detectable_depth(model: LayeredModel, survey: Survey) -> float:
+    """Depth below which a change of the earth would go unnoticed in the data.
+
+    Multiplying or dividing every resistivity below depth z by 10^0.2 (0.2
+    decades) changes the noise-free data by chi2 = 9 (three standard
+    deviations, with 3% errors) at this depth, and by less below it. It is
+    computed from the true model only, independently of the inversion.
+    """
+    base = np.log(forward(model, survey))
+    tops = np.concatenate([[0.0], model.depths])
+
+    def excess(log_z: float, factor: float) -> float:
+        z = np.exp(log_z)
+        k = int(np.searchsorted(tops, z, side="right"))  # layer k - 1 holds z
+        depths = np.concatenate([model.depths[: k - 1], [z], model.depths[k - 1 :]])
+        rho = np.concatenate(
+            [model.resistivity[:k], model.resistivity[k - 1 :] * factor]
+        )
+        changed = LayeredModel(
+            resistivity=rho, thickness=np.diff(np.concatenate([[0.0], depths]))
+        )
+        misfit = ((np.log(forward(changed, survey)) - base) / NOISE.relative) ** 2
+        return float(np.sum(misfit)) - 9.0
+
+    return max(
+        float(np.exp(optimize.brentq(excess, np.log(1e-3), np.log(1e5), args=(f,))))
+        for f in (10**0.2, 10**-0.2)
+    )
+
+
 @pytest.mark.verification
 def test_depth_of_investigation_index(
     verification: Verification, fit: SmoothFit
 ) -> None:
-    tops = np.concatenate([[0.0], fit.model.depths])
+    survey = Survey.schlumberger(ab2=np.geomspace(1.0, 300.0, 24), mn2=0.5)
+    z_det = _detectable_depth(BASEMENT, survey)
     verification.check(
-        "DOI: largest rescaled index of the layers above the depth of investigation",
-        float(np.max(fit.doi_index[tops < fit.doi])),
-        DOI_THRESHOLD,
-        "every layer above the depth of investigation must be controlled by the data "
-        "(Oldenburg and Li 1999)",
+        "DOI: depth of investigation / detectable depth of the true model",
+        fit.doi / z_det,
+        1.25,
+        "the data cannot see a 0.2-decade change below the detectable depth (chi2 "
+        "change below 9), so a depth of investigation much deeper would claim "
+        "resolution the data do not have",
+    )
+    verification.check(
+        "DOI: detectable depth of the true model / depth of investigation",
+        z_det / fit.doi,
+        4.0,
+        "a depth of investigation far shallower than the detectable depth would "
+        "discard structure the data do resolve",
     )
     verification.check(
         "DOI: 1 - rescaled index of the second deepest layer",
@@ -103,13 +145,41 @@ def test_depth_of_investigation_index(
 
 def test_isolated_shallow_exceedance_does_not_set_the_depth() -> None:
     # With this survey one shallow layer's index fluctuates just above the
-    # threshold near 1.6 m; the depth of investigation is where resolution is
-    # lost, about 19 m, not at that fluctuation.
+    # threshold near 1.6 m; the depth of investigation, found from the bottom
+    # up, is where resolution is lost, about 19 m, not at that fluctuation.
     survey = Survey.schlumberger(ab2=np.geomspace(2.5, 50.0, 24), mn2=0.5)
     result = invert_smooth(Sounding.synthetic(BASEMENT, survey, NOISE, rng=4))
     tops = np.concatenate([[0.0], result.model.depths])
     assert np.any((result.doi_index >= DOI_THRESHOLD) & (tops < 5.0))
     assert 10.0 < result.doi < 50.0
+
+
+README_MODEL = LayeredModel(resistivity=[150.0, 30.0, 800.0], thickness=[2.0, 15.0])
+
+
+@pytest.mark.parametrize(
+    ("survey", "seed"),
+    [
+        (Survey.schlumberger(ab2=np.geomspace(2.5, 200.0, 22), mn2=0.5), 205),
+        (Survey.wenner(np.geomspace(1.0, 100.0, 20)), 102),
+    ],
+    ids=["schlumberger", "wenner"],
+)
+def test_overshoot_dips_do_not_make_the_depth_shallow(
+    survey: Survey, seed: int
+) -> None:
+    # Before release 0.1 the first layer above the threshold set the depth:
+    # for these noise draws an overshoot of the reference inversions near the
+    # top gave depths of investigation of a few meters.
+    data = Sounding.synthetic(README_MODEL, survey, NOISE, rng=seed)
+    assert invert_smooth(data).doi > 10.0
+
+
+def test_depth_of_investigation_hardly_depends_on_the_number_of_layers() -> None:
+    survey = Survey.schlumberger(ab2=np.geomspace(2.5, 200.0, 22), mn2=0.5)
+    data = Sounding.synthetic(README_MODEL, survey, NOISE, rng=4)
+    depths = [invert_smooth(data, n_layers=n).doi for n in (20, 30, 45, 60)]
+    assert max(depths) < 1.5 * min(depths)
 
 
 def test_depth_of_investigation_grows_with_spread_length() -> None:
@@ -156,6 +226,7 @@ def test_overstated_errors_give_the_smoothest_model_and_warn() -> None:
 
 
 @pytest.mark.filterwarnings("ignore:the smoothest model:ertkit.DataWarning")
+@pytest.mark.filterwarnings("ignore:relative error 2 is 200%:ertkit.DataWarning")
 def test_depth_of_investigation_is_zero_when_nothing_is_resolved() -> None:
     # Errors of 200% leave every layer to the reference models.
     result = invert_smooth(_half_space_data(2.0))
@@ -163,8 +234,9 @@ def test_depth_of_investigation_is_zero_when_nothing_is_resolved() -> None:
     assert np.min(result.doi_index) > DOI_THRESHOLD
 
 
-def test_unreachable_target_returns_the_minimized_misfit() -> None:
-    # 10% noise reported as 1%: chi2 = N_d cannot be reached.
+def test_unreachable_target_is_relaxed_and_a_poor_fit_reported() -> None:
+    # 10% noise reported as 1%: chi2 = N_d cannot be reached, and even the
+    # smallest misfit is improbably large.
     survey = Survey.schlumberger(ab2=np.geomspace(1.0, 300.0, 24), mn2=0.5)
     eps = np.random.default_rng(0).standard_normal(24)
     rhoa = forward(BASEMENT, survey) * np.exp(0.10 * eps)
@@ -172,15 +244,30 @@ def test_unreachable_target_returns_the_minimized_misfit() -> None:
     with pytest.warns(DataWarning, match="underestimated"):
         result = invert_smooth(data, depth_of_investigation=False)
     assert result.converged
-    assert result.stop_reason == TARGET_UNREACHABLE
+    assert result.stop_reason == _TARGET_RELAXED
+    assert result.chi2_target > data.n_data
+    assert result.chi2 == pytest.approx(result.chi2_target, rel=1e-3)
     start = _Occam(data, result.model.thickness, 0.0, 0.0)
     uniform = np.full(result.model.n_layers, float(np.mean(data.log_data)))
     assert result.chi2 < start.chi2(uniform)
 
 
-@pytest.mark.filterwarnings(
-    "ignore:the target misfit cannot be reached:ertkit.DataWarning"
-)
+def test_unreachable_target_with_correct_errors_is_not_a_poor_fit() -> None:
+    # With correct errors chi2 = N_d is out of reach for a few percent of
+    # soundings (this seed); the smallest misfit is plausible, so the
+    # inversion fits 1.1 times it without a warning.
+    data = _data(300.0, rng=108)
+    result = invert_smooth(data)
+    assert result.converged
+    assert result.stop_reason == _TARGET_RELAXED
+    chi2_min = result.chi2_target / _REFIT_FACTOR
+    assert data.n_data < result.chi2_target < 1.5 * data.n_data
+    assert chi2_min < result.chi2_target
+    assert result.chi2 == pytest.approx(result.chi2_target, rel=1e-3)
+    assert np.isfinite(result.doi)
+
+
+@pytest.mark.filterwarnings("ignore:poor fit:ertkit.DataWarning")
 def test_extreme_data_do_not_overflow() -> None:
     # A contrast of 1e4 with 20% noise reported as 0.5%, on 80 layers: before
     # the fix the model overflowed to nan.
@@ -227,3 +314,26 @@ def test_too_few_iterations_warns() -> None:
 def test_validation(kwargs: dict[str, object], match: str) -> None:
     with pytest.raises(ValueError, match=match):
         invert_smooth(_data(100.0), **kwargs)  # type: ignore[arg-type]
+
+
+def test_residuals_and_summary(fit: SmoothFit) -> None:
+    assert np.sum(fit.residuals**2) == pytest.approx(fit.chi2, rel=1e-10)
+    summary = fit.summary()
+    assert summary.startswith("SmoothFit: chi2 = ")
+    assert f"depth of investigation: {fit.doi:.3g} m" in summary
+
+
+def test_data_must_be_a_sounding() -> None:
+    with pytest.raises(TypeError, match="data must be a Sounding"):
+        invert_smooth(np.ones(10))  # type: ignore[arg-type]
+
+
+def test_poor_fit_with_several_mn_segments_suggests_static_shifts() -> None:
+    ab2 = np.geomspace(1.0, 300.0, 24)
+    survey = Survey.schlumberger(ab2=ab2, mn2=np.where(ab2 < 15, 0.5, 5.0))
+    shift = np.where(ab2 < 15, 1.0, 1.4)
+    eps = np.random.default_rng(0).standard_normal(24)
+    rhoa = forward(BASEMENT, survey) * shift * np.exp(0.01 * eps)
+    data = Sounding(survey=survey, rhoa=rhoa, error=ErrorModel(relative=0.01))
+    with pytest.warns(DataWarning, match="static_shift=True"):
+        invert_smooth(data, depth_of_investigation=False)

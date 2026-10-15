@@ -46,12 +46,21 @@ for name, fit in (("four layers", four), ("three layers", three)):
 
 # %%
 # Both fits are acceptable. Even knowing the true structure, the four-layer
-# fit reports how poorly the data determine the fractured zone: large
-# multiplicative uncertainties on its resistivity (``rho_3``) and thickness
-# (``h_3``), while the layers above remain well determined.
+# fit reports, with a warning, how poorly the data determine the fractured
+# zone: large multiplicative uncertainties on its resistivity (``rho_3``) and
+# thickness (``h_3``), while the layers above remain well determined.
 
 for name, factor in zip(four.parameter_names, four.factor, strict=True):
     print(f"{name:>6}: known within a factor of {factor:.2f}")
+
+# %%
+# The depth to fresh basement, the usual drilling target, is 42 m in the true
+# model. The four-layer fit reports that the data barely determine it. The
+# three-layer fit gives a precise depth, but to the top of the fractured zone,
+# which it merges with the basement: a precise answer to a different question.
+
+for name, fit in (("four layers", four), ("three layers", three)):
+    print(f"{name}: basement at {fit.depths[-1]:.1f} +- {fit.depth_std[-1]:.1f} m")
 
 # %%
 # The fitted curves are almost indistinguishable:
@@ -65,5 +74,5 @@ plot.layered_model(
 
 # %%
 # A linearized uncertainty is only a first warning here: for equivalent
-# models it can still understate the range of models that fit. Release 0.2
-# of ertkit adds an equivalence analysis that samples that range directly.
+# models it can still understate the range of models that fit. An equivalence
+# analysis that samples that range directly is planned for release 0.2.

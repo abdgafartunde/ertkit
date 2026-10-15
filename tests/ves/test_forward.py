@@ -19,7 +19,7 @@ from ertkit.ves import (
 )
 from ertkit.ves.forward import _rhoa, _tanh
 
-CONTRASTS = [1e-3, 1e-2, 1e-1, 1e1, 1e2, 1e3]  # rho2 / rho1, capped at 1000
+CONTRASTS = [1e-4, 1e-3, 1e-2, 1e-1, 1e1, 1e2, 1e3, 1e4]  # rho2 / rho1
 R_OVER_H = np.geomspace(0.1, 100.0, 41)
 
 
@@ -65,7 +65,7 @@ def test_two_layer_potential_against_image_series(verification: Verification) ->
         exact = two_layer_potential(r, rho1, contrast * rho1, h)
         worst = max(worst, float(np.max(np.abs(potential(model, r) / exact - 1))))
     verification.check(
-        "max relative error in V, two-layer earths, contrast 1e-3 to 1e3, r/h 0.1 to 100",
+        "max relative error in V, two-layer earths, contrast 1e-4 to 1e4, r/h 0.1 to 100",
         worst,
         1e-6,
         "design gate of section 3.5: well below any measurement error",

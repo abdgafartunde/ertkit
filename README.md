@@ -16,8 +16,8 @@ result comes with what is needed to judge it:
   of the data;
 - sensitivity and depth of investigation, so that unresolved parts of a model
   are marked as such;
-- parameter uncertainty and, from release 0.2, the range of equivalent models
-  that fit the data equally well.
+- parameter uncertainty, with the range of equivalent models that fit the data
+  equally well planned for release 0.2.
 
 ## Why another resistivity code?
 
@@ -50,10 +50,27 @@ data = ves.Sounding.synthetic(truth, survey, ertkit.ErrorModel(relative=0.03), r
 # Field data: data = ves.read_csv("sounding.csv")
 
 fit = ves.invert_few_layer(data, n_layers=3, rng=0)
-print(fit.model.resistivity, fit.factor)  # values and multiplicative uncertainties
-print(fit.depths, fit.depth_std)  # interface depths (m) and their standard deviations
-print(ves.invert_smooth(data).doi)  # depth of investigation (m)
+print(fit.summary())  # layers with uncertainty factors (x/), depths +- sd, fit
+
+smooth = ves.invert_smooth(data)
+print(f"depth of investigation: {smooth.doi:.0f} m")
 ```
+
+The first `print` shows:
+
+```text
+LayerFit: chi2 = 16.1 for 22 data (target 17, ratio 0.947)
+converged: True (`ftol` termination condition is satisfied.)
+
+layer  resistivity (ohm m)    thickness (m)         depth (m)
+    1      144.6 x/ 1.04          2.04 x/ 1.04           2.04 +- 0.075
+    2      30.18 x/ 1.03          15.2 x/ 1.05           17.3 +- 0.69
+    3      787.9 x/ 1.12      half-space
+p-value: 0.517
+```
+
+Here `x/ 1.04` means "multiplied or divided by 1.04" (one standard
+deviation).
 
 ## Status
 

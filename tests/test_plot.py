@@ -64,6 +64,33 @@ def test_log_depth_axis(data: Sounding) -> None:
     assert 0.0 < ax.get_ylim()[1] < ax.get_ylim()[0] == 100.0
 
 
+def test_wenner_fit_is_drawn_as_one_curve() -> None:
+    # MN changes with every Wenner reading; one-reading segments would be
+    # invisible single points.
+    survey = Survey.wenner(a=np.geomspace(1.0, 150.0, 18))
+    wenner = Sounding.synthetic(MODEL, survey, rng=2)
+    fit = invert_few_layer(wenner, 3, rng=0)
+    ax = plot.sounding(wenner, fit)
+    assert max(len(line.get_xdata()) for line in ax.get_lines()) == survey.n_readings
+
+
+@pytest.mark.filterwarnings("ignore::ertkit.DataWarning")
+def test_unbounded_error_bars_stay_on_the_plot() -> None:
+    # A half-space fitted with two layers: the interface depth and the bottom
+    # resistivity are undetermined.
+    survey = Survey.schlumberger(ab2=np.geomspace(1.0, 300.0, 20), mn2=0.5)
+    half_space = LayeredModel(resistivity=[100.0], thickness=[])
+    fit = invert_few_layer(Sounding.synthetic(half_space, survey, rng=2), 2, rng=0)
+    assert np.isinf(fit.factor).any() or fit.factor.max() > 1e3
+    ax = plot.layered_model(fit, depth_max=50.0)
+    for collection in ax.collections:
+        for segment in collection.get_segments():
+            assert np.all(np.isfinite(segment))
+    assert ax.get_ylim() == (50.0, 0.0)
+    left, right = ax.get_xlim()
+    assert right / left < 1e6
+
+
 def test_missing_matplotlib_gives_a_clear_error() -> None:
     code = (
         "import sys; sys.modules['matplotlib'] = None\n"

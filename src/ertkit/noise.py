@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
+
+from ertkit._warnings import DataWarning
 
 __all__ = ["ErrorModel"]
 
@@ -30,17 +33,25 @@ class ErrorModel:
     Parameters
     ----------
     relative : float, optional
-        Relative part :math:`b`. The default, 0.03, is a common choice that
-        includes a floor for modeling errors; change it when an error model
-        fitted to reciprocal measurements (Tso et al. 2017) justifies another
-        value.
+        Relative part :math:`b`, as a fraction: 0.03 means 3%. The default,
+        0.03, is a common choice; 2 to 5% is typical, and up to 10% where the
+        earth is far from layered. It should include a floor for modeling
+        errors: reciprocal or repeated readings (Tso et al. 2017) measure the
+        noise only, so they do not justify a value below about 2%.
     absolute : float, optional
-        Absolute part :math:`a`, in ohms. Default 0.
+        Absolute part :math:`a`, in ohms: about the voltage noise divided by
+        the current. Default 0.
 
     Raises
     ------
     ValueError
         If a part is negative or not finite, or if both are zero.
+
+    Warns
+    -----
+    DataWarning
+        If ``relative`` is above 0.5, which suggests a percentage given where
+        a fraction is expected.
 
     Examples
     --------
@@ -60,6 +71,13 @@ class ErrorModel:
                 raise ValueError(f"{name} error must be finite and non-negative")
         if self.relative == 0 and self.absolute == 0:
             raise ValueError("at least one of relative and absolute must be positive")
+        if self.relative > 0.5:
+            warnings.warn(
+                f"relative error {self.relative:g} is {100 * self.relative:g}%; "
+                "it is a fraction: 0.03 means 3%",
+                DataWarning,
+                stacklevel=3,
+            )
         object.__setattr__(self, "relative", float(self.relative))
         object.__setattr__(self, "absolute", float(self.absolute))
 

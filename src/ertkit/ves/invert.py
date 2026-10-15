@@ -33,8 +33,21 @@ from ertkit.ves.model import LayeredModel
 __all__ = ["LayerFit", "invert_few_layer"]
 
 _STEP = 1e-30  # complex step; any value far below sqrt(machine epsilon) works
-POOR_FIT_P_VALUE = 0.01
+_POOR_FIT_P_VALUE = 0.01
 """Goodness-of-fit p-value below which a fit is reported as poor."""
+_SMALL_MISFIT_P_VALUE = 0.99
+"""Goodness-of-fit p-value above which the errors look overestimated."""
+_POORLY_DETERMINED_FACTOR = 10.0
+"""Uncertainty factor above which a parameter is reported as poorly determined."""
+_EXPLORE_EVALUATIONS = 30
+"""Evaluations per parameter for each starting model; the best are then polished."""
+_POLISH_EVALUATIONS = 200
+"""Evaluations per parameter for polishing a start."""
+_POLISHED_STARTS = 3
+"""Most starts polished, best first, until one converges at the smallest misfit."""
+_STALLED_CHI2 = 1e-3
+"""A polished start whose chi2 falls by less than this over its whole run has
+converged in misfit; it is only moving along a ridge of equivalent models."""
 
 
 @dataclass(frozen=True, eq=False, kw_only=True, slots=True)
@@ -67,8 +80,11 @@ class LayerFit(InversionResult):
         log thickness exceeds about 0.5, the linearization is poor and these
         values are only indicative.
     static_shift : ndarray
-        Multiplicative static-shift factor of each MN segment (the first is 1
-        by definition). All ones when shifts were not estimated.
+        Multiplicative static-shift factor of each MN segment, relative to the
+        first segment (whose factor is 1 by definition). All ones when shifts
+        were not estimated.
+    segment_mn2 : ndarray
+        MN/2 of each segment, in meters, in the order of ``static_shift``.
     p_value : float
         Probability of a misfit at least this large if the model and the error
         model were right (:math:`\chi^2` distribution with :math:`N_d - p`
@@ -79,6 +95,10 @@ class LayerFit(InversionResult):
         Parameters that ended at their search bounds (see the Notes of
         :func:`invert_few_layer`). The data do not resolve them, and their
         uncertainty factors are not meaningful.
+
+    See Also
+    --------
+    ertkit.InversionResult : The attributes common to all results.
     """
 
     model: LayeredModel
@@ -89,6 +109,7 @@ class LayerFit(InversionResult):
     depths: NDArray[np.float64]
     depth_std: NDArray[np.float64]
     static_shift: NDArray[np.float64]
+    segment_mn2: NDArray[np.float64]
     p_value: float
     n_starts: int
     at_bound: tuple[str, ...]
@@ -103,6 +124,40 @@ class LayerFit(InversionResult):
         """
         with np.errstate(over="ignore"):
             return np.exp(self.std_log)
+
+    def _details(self) -> list[str]:
+        n = self.model.n_layers
+        factor = self.factor
+        lines = [
+            "",
+            (
+                f"{'layer':>5}  {'resistivity (ohm m)':<21}  {'thickness (m)':<20}  "
+                "depth (m)"
+            ),
+        ]
+        for i in range(n):
+            rho = f"{self.model.resistivity[i]:9.4g} x/ {_factor(factor[i]):<8}"
+            if i < n - 1:
+                h = f"{self.model.thickness[i]:8.3g} x/ {_factor(factor[n + i]):<8}"
+                z = f"{self.depths[i]:9.3g} +- {self.depth_std[i]:.2g}"
+            else:
+                h, z = f"{'half-space':>10}", ""
+            lines.append(f"{i + 1:5d}  {rho}  {h:20}  {z}".rstrip())
+        lines.append(f"p-value: {self.p_value:.3g}")
+        if "shift_2" in self.parameter_names:
+            shifts = ", ".join(
+                f"{s:.3g} (MN/2 = {mn2:g} m)"
+                for s, mn2 in zip(self.static_shift, self.segment_mn2, strict=True)
+            )
+            lines.append(f"static shifts: {shifts}")
+        if self.at_bound:
+            lines.append(f"at search bounds: {', '.join(self.at_bound)}")
+        return lines
+
+
+def _factor(value: float) -> str:
+    """Format an uncertainty factor (x/ means multiplied or divided by)."""
+    return f"{value:.3g}" if np.isfinite(value) else "inf"
 
 
 def _segments(mn2: NDArray[np.float64]) -> NDArray[np.intp]:
@@ -143,6 +198,48 @@ def _linearized_covariance(
     cov[unresolved, unresolved] = np.inf
     corr[~unresolved, ~unresolved] = 1.0
     return cov, std, corr
+
+
+def _segment_mn2(
+    mn2: NDArray[np.float64], segment: NDArray[np.intp]
+) -> NDArray[np.float64]:
+    """MN/2 of each segment, in segment order."""
+    out = np.empty(int(segment.max()) + 1)
+    out[segment] = mn2
+    return out
+
+
+def _static_shift_hint(n_segments: int) -> str:
+    """Advice for a poor fit of data with several MN segments."""
+    if n_segments < 2:
+        return ""
+    return (
+        "; if the curve steps where MN changes, estimate static shifts "
+        "(invert_few_layer(..., static_shift=True))"
+    )
+
+
+def _bound_advice(name: str, upper: bool, n_layers: int) -> str:
+    """What a parameter at its search bound means, and what to do about it."""
+    kind, _, index = name.partition("_")
+    side = "upper" if upper else "lower"
+    if kind == "shift":
+        return f"{name} ({side} bound: a shift beyond a factor of 2 suggests a data problem)"
+    if kind == "h":
+        if upper:
+            return f"{name} (upper bound: the layer reaches below the data; consider fewer layers)"
+        return f"{name} (lower bound: the layer is too thin to resolve; consider fewer layers)"
+    if int(index) == n_layers:
+        limit = "lower" if upper else "upper"
+        return (
+            f"{name} ({side} bound: the data give only an {limit} limit on the "
+            "bottom resistivity; longer AB/2 would resolve it)"
+        )
+    product = "transverse resistance h * rho" if upper else "conductance h / rho"
+    return (
+        f"{name} ({side} bound: only the {product} of layer {index} may be "
+        "determined; consider fewer layers)"
+    )
 
 
 class _Problem:
@@ -266,9 +363,12 @@ def invert_few_layer(
 
     Raises
     ------
+    TypeError
+        If ``data`` is not a :class:`Sounding`.
     ValueError
         If ``n_layers`` or ``n_starts`` is less than 1, if there are not more
-        data than parameters, or if ``start`` has the wrong number of layers.
+        data than parameters, if ``start`` has the wrong number of layers, or
+        if ``static_shift`` is set and an MN segment has a single reading.
 
     Warns
     -----
@@ -276,15 +376,21 @@ def invert_few_layer(
         If the best fit did not meet the convergence criterion.
     DataWarning
         If the fit is poor (goodness-of-fit p-value below 0.01: the errors may
-        be underestimated, or the model needs more layers), or if parameters
-        end at their search bounds (listed in ``LayerFit.at_bound``).
+        be underestimated, or the model needs more layers or static shifts),
+        if it is closer than the errors imply (p-value above 0.99: the errors
+        may be overestimated), if parameters end at their search bounds
+        (listed in ``LayerFit.at_bound``), or if other parameters are poorly
+        determined (uncertainty factor above 10).
 
     Notes
     -----
     The parameters are searched within bounds beyond which the data cannot
     resolve them: resistivities within a factor of 1000 of the observed
     apparent resistivities, thicknesses between 1/1000 of the smallest and 10
-    times the largest AB/2, and static shifts within a factor of 2.
+    times the largest AB/2, and static shifts within a factor of 2. Each
+    starting model runs for 30 function evaluations per parameter; the best
+    are then continued, for up to 200 evaluations per parameter each, until
+    one converges at the smallest misfit.
 
     The linearized covariance of the log parameters is
     :math:`(J^T W^2 J)^{-1}` with :math:`W = \mathrm{diag}(1/s_i)`, computed
@@ -305,6 +411,9 @@ def invert_few_layer(
     >>> fit.parameter_names
     ('rho_1', 'rho_2', 'rho_3', 'h_1', 'h_2')
     """
+    data_obj: object = data
+    if not isinstance(data_obj, Sounding):
+        raise TypeError(f"data must be a Sounding, got {type(data_obj).__name__}")
     n_layers = operator.index(n_layers)
     n_starts = operator.index(n_starts)
     if n_layers < 1:
@@ -312,6 +421,16 @@ def invert_few_layer(
     if n_starts < 1:
         raise ValueError("n_starts must be at least 1")
     problem = _Problem(data, n_layers, static_shift)
+    segment_mn2 = _segment_mn2(problem.mn2, problem.segment)
+    if problem.n_shifts:
+        single = segment_mn2[np.bincount(problem.segment) < 2]
+        if single.size:
+            raise ValueError(
+                "static shifts need at least 2 readings in each MN segment "
+                "(readings with the same MN/2); only 1 reading has MN/2 = "
+                f"{', '.join(f'{v:g}' for v in single)} m. Wenner and other "
+                "arrays whose MN grows with AB have no segments to shift."
+            )
     if data.n_data <= problem.n_params:
         raise ValueError(
             f"{data.n_data} data cannot determine {problem.n_params} parameters"
@@ -352,8 +471,8 @@ def invert_few_layer(
     # Tolerances: 1e-8 in the log parameters is far below any uncertainty that
     # matters, and tighter values make starts on an equivalence ridge run out
     # of evaluations without improving the fit.
-    fits = [
-        optimize.least_squares(
+    def solve(x0: NDArray[np.float64], max_nfev: int) -> optimize.OptimizeResult:
+        return optimize.least_squares(
             residual,
             np.clip(x0, lower + margin, upper - margin),
             jac=jacobian,
@@ -363,18 +482,52 @@ def invert_few_layer(
             ftol=1e-10,
             xtol=1e-8,
             gtol=1e-10,
-            max_nfev=200 * problem.n_params,
+            max_nfev=max_nfev,
         )
-        for x0 in starts
-    ]
-    best = min(fits, key=lambda f: f.cost)
-    converged = bool(
-        best.success
-        or any(f.success and f.cost <= best.cost * (1 + 1e-8) + 1e-12 for f in fits)
-    )
+
+    def at_minimum(fits: list[optimize.OptimizeResult], done: list[bool]) -> bool:
+        """Whether a start converged at (within round-off of) the smallest misfit."""
+        cost = min(f.cost for f in fits)
+        return any(
+            d and f.cost <= cost * (1 + 1e-8) + 1e-12
+            for f, d in zip(fits, done, strict=True)
+        )
+
+    # Every start gets a short run, and only the best are continued: starts
+    # that crawl along an equivalence ridge would otherwise use most of the
+    # time. A polished start that runs out of evaluations while its misfit
+    # stays put has converged in misfit and is only moving along the ridge;
+    # otherwise the next best are polished until one converges.
+    fits = [solve(x0, _EXPLORE_EVALUATIONS * problem.n_params) for x0 in starts]
+    n_evaluations = [int(f.nfev) for f in fits]
+    done = [bool(f.success) for f in fits]
+    messages = [str(f.message) for f in fits]
+    for i in np.argsort([f.cost for f in fits])[:_POLISHED_STARTS]:
+        if at_minimum(fits, done):
+            break
+        if fits[i].status != 0:  # stopped for a reason other than the budget
+            continue
+        budget = _POLISH_EVALUATIONS * problem.n_params
+        polished = solve(fits[i].x, budget)
+        n_evaluations[i] += int(polished.nfev)
+        decrease = 2.0 * (fits[i].cost - polished.cost)
+        if polished.cost <= fits[i].cost:
+            fits[i] = polished
+            messages[i] = str(polished.message)
+        done[i] = bool(polished.success)
+        if not done[i] and polished.nfev >= budget and decrease < _STALLED_CHI2:
+            done[i] = True
+            messages[i] = (
+                f"chi2 changed by less than {_STALLED_CHI2:g} in "
+                f"{int(polished.nfev)} evaluations; the parameters move only "
+                "along a ridge of equivalent models"
+            )
+    i_best = int(np.argmin([f.cost for f in fits]))
+    best = fits[i_best]
+    converged = at_minimum(fits, done)
     if not converged:
         warnings.warn(
-            f"the best fit did not converge: {best.message}",
+            f"the best fit did not converge: {messages[i_best]}",
             ConvergenceWarning,
             stacklevel=2,
         )
@@ -389,14 +542,14 @@ def invert_few_layer(
         if value <= lo + t or value >= hi - t
     )
     if at_bound:
-        advice = []
-        if any(not name.startswith("shift") for name in at_bound):
-            advice.append("consider fewer layers")
-        if any(name.startswith("shift") for name in at_bound):
-            advice.append("a static shift beyond a factor of 2 suggests a data problem")
+        advice = [
+            _bound_advice(name, value >= hi - t, n)
+            for name, value, hi, t in zip(names, m, upper, tol, strict=True)
+            if name in at_bound
+        ]
         warnings.warn(
-            f"parameters at their search bounds, not resolved by the data: "
-            f"{', '.join(at_bound)}; {'; '.join(advice)}",
+            "parameters at their search bounds, not resolved by the data: "
+            + "; ".join(advice),
             DataWarning,
             stacklevel=2,
         )
@@ -404,17 +557,42 @@ def invert_few_layer(
     chi2 = float(2.0 * best.cost)
     dof = data.n_data - problem.n_params
     p_value = float(stats.chi2.sf(chi2, dof))
-    if p_value < POOR_FIT_P_VALUE:
+    if p_value < _POOR_FIT_P_VALUE:
+        hint = "" if static_shift else _static_shift_hint(segment_mn2.size)
         warnings.warn(
             f"poor fit: chi2 = {chi2:.1f} for {dof} degrees of freedom "
             f"(p = {p_value:.2g}); the errors may be underestimated, or more "
-            "layers may be needed",
+            f"layers may be needed{hint}. The uncertainties are then too small: "
+            f"the standard deviations should be about sqrt(chi2/{dof}) = "
+            f"{np.sqrt(chi2 / dof):.2g} times larger.",
+            DataWarning,
+            stacklevel=2,
+        )
+    elif p_value > _SMALL_MISFIT_P_VALUE:
+        warnings.warn(
+            f"the fit is closer than the errors imply: chi2 = {chi2:.1f} for "
+            f"{dof} degrees of freedom (p = {p_value:.2g}); the errors may be "
+            "overestimated, and the uncertainty factors then too large",
             DataWarning,
             stacklevel=2,
         )
 
     weighted = problem.jacobian(m) / problem.s[:, np.newaxis]
     covariance, std_log, correlation = _linearized_covariance(weighted)
+    poor = tuple(
+        name
+        for name, s in zip(names, std_log, strict=True)
+        if s >= np.log(_POORLY_DETERMINED_FACTOR) and name not in at_bound
+    )
+    if poor:
+        warnings.warn(
+            f"poorly determined parameters (uncertainty factor above "
+            f"{_POORLY_DETERMINED_FACTOR:g}): {', '.join(poor)}. Other values "
+            "fit the data equally well (equivalence; see LayerFit.correlation); "
+            "consider fewer layers.",
+            DataWarning,
+            stacklevel=2,
+        )
     resistivity, thickness = np.exp(m[:n]), np.exp(m[n : 2 * n - 1])
     # Depth z_i = h_1 + ... + h_i; its gradient with respect to ln h_j is h_j (j <= i).
     grad = np.tril(np.ones((n - 1, n - 1))) * thickness[np.newaxis, :]
@@ -429,14 +607,16 @@ def invert_few_layer(
     if not problem.n_shifts:
         shifts = np.ones(int(problem.segment.max()) + 1)
 
+    predicted = problem.predict(m).real
     return LayerFit(
-        predicted=np.exp(problem.predict(m).real),
+        predicted=np.exp(predicted),
+        residuals=(data.log_data - predicted) / data.log_std,
         chi2=chi2,
         chi2_target=float(dof),
         n_data=data.n_data,
         converged=converged,
-        stop_reason=str(best.message),
-        n_iterations=int(best.nfev),
+        stop_reason=messages[i_best],
+        n_iterations=n_evaluations[i_best],
         model=LayeredModel(resistivity=resistivity, thickness=thickness),
         parameter_names=names,
         std_log=std_log,
@@ -445,6 +625,7 @@ def invert_few_layer(
         depths=np.cumsum(thickness),
         depth_std=depth_std,
         static_shift=shifts,
+        segment_mn2=segment_mn2,
         p_value=p_value,
         n_starts=len(starts),
         at_bound=at_bound,
