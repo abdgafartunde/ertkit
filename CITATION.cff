@@ -7,7 +7,8 @@ authors:
     given-names: "Abd'gafar Tunde"
     orcid: "https://orcid.org/0000-0003-1641-7196"
     affiliation: "School of Mathematics, Jilin University"
-# A version and a Zenodo DOI are added with release 0.1.
+version: "0.1.0"
+date-released: "2026-10-15"
 license: MIT
 repository-code: "https://github.com/abdgafartunde/ertkit"
 url: "https://abdgafartunde.github.io/ertkit/"
