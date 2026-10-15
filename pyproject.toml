@@ -51,6 +51,7 @@ Documentation = "https://abdgafartunde.github.io/ertkit/"
 Source = "https://github.com/abdgafartunde/ertkit"
 Issues = "https://github.com/abdgafartunde/ertkit/issues"
 Changelog = "https://github.com/abdgafartunde/ertkit/blob/main/CHANGELOG.md"
+Citation = "https://doi.org/10.5281/zenodo.23385097"
 
 [dependency-groups]
 test = [

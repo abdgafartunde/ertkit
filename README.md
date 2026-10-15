@@ -4,6 +4,7 @@
 [![CI](https://github.com/abdgafartunde/ertkit/actions/workflows/ci.yml/badge.svg)](https://github.com/abdgafartunde/ertkit/actions/workflows/ci.yml)
 [![Docs](https://github.com/abdgafartunde/ertkit/actions/workflows/docs.yml/badge.svg)](https://abdgafartunde.github.io/ertkit/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/abdgafartunde/ertkit/blob/main/LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23385097.svg)](https://doi.org/10.5281/zenodo.23385097)
 
 **Resistivity imaging for groundwater exploration, with an honest account of
 what the data can resolve.**
@@ -114,7 +115,9 @@ and the [Code of Conduct](https://github.com/abdgafartunde/ertkit/blob/main/CODE
 
 ## Citing
 
-Each release is archived on Zenodo with a DOI. Citation metadata are in
+Each release is archived on Zenodo with a DOI; to cite ertkit in general, use
+the concept DOI [10.5281/zenodo.23385097](https://doi.org/10.5281/zenodo.23385097),
+which always resolves to the latest version. Citation metadata are in
 [CITATION.cff](https://github.com/abdgafartunde/ertkit/blob/main/CITATION.cff);
 please also cite the methods ertkit implements.
 
