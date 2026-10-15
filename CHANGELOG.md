@@ -6,6 +6,8 @@ project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-15
+
 ### Added
 
 - Project foundation (milestone 0.0): packaging with versions from git tags,
@@ -78,4 +80,5 @@ project uses [semantic versioning](https://semver.org/).
   recorded in a verification report (`pytest -m verification
   --verification-report=PATH`).
 
-[Unreleased]: https://github.com/abdgafartunde/ertkit/commits/main
+[Unreleased]: https://github.com/abdgafartunde/ertkit/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/abdgafartunde/ertkit/releases/tag/v0.1.0
