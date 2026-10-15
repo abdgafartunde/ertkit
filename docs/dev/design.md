@@ -173,9 +173,10 @@ $$
 
 with $a$ in ohms and $b$ relative. Since $\rho_a = KR$, the data
 $d_i = \ln \rho_{a,i}$ have log-space standard deviations
-$s_i = b + a/|R_i|$. Unless reciprocal measurements justify less, $b$ includes
-a modeling-error floor of 2 to 3% (Tso et al. 2017), because measurement noise
-alone leads to overfitting field data. Data with $R_i \le 0$ or
+$s_i = b + a/|R_i|$. By convention $b$ includes a modeling-error floor of 2
+to 3%, because measurement noise alone leads to overfitting field data;
+reciprocal measurements (Tso et al. 2017) characterize the noise but not the
+modeling error, so they do not justify a smaller value. Data with $R_i \le 0$ or
 $|R_i| < 3a$ are removed with a warning, since their logarithm is undefined or
 dominated by noise. The misfit is
 
@@ -195,8 +196,12 @@ $\chi^2 = N_d$.
   (`scipy.optimize.least_squares`) from several starting models, within search
   bounds beyond which the data cannot resolve a parameter (resistivities within
   a factor of 1000 of the observed range, thicknesses between 1/1000 of the
-  smallest and 10 times the largest $AB/2$); parameters that end at a bound are
-  reported as unresolved. The Jacobian
+  smallest and 10 times the largest $AB/2$). Each start runs for $30p$
+  evaluations, and the best are continued for up to $200p$ more until one
+  converges at the smallest misfit; starts that crawl along an equivalence
+  ridge would otherwise take most of the time. Parameters that end at a bound
+  are reported as unresolved, with advice for each, and parameters with an
+  uncertainty factor above 10 as poorly determined. The Jacobian
   is computed by complex-step differentiation of the recurrence and the
   filter, which is accurate to round-off. Report the linearized covariance
   $(J^T W^2 J)^{-1}$, where $W = \mathrm{diag}(1/s_i)$; the standard deviation
@@ -204,7 +209,9 @@ $\chi^2 = N_d$.
   $\rho_i$ known within a factor of 1.2), the correlation matrix, and the
   depths $z_i = h_1 + \dots + h_i$ with their standard deviations, since
   drilling decisions use depth. A goodness-of-fit $p$-value with $N_d - p$
-  degrees of freedom is reported, with a warning below 0.01.
+  degrees of freedom is reported, with a warning below 0.01 (which also says
+  that the uncertainties are then too small) and above 0.99 (errors
+  overestimated).
 - **Smooth (Occam) inversion.** Many thin layers with fixed, logarithmically
   growing thicknesses and first-difference roughness $\partial$ on
   $\ln \rho$. Following Constable et al. (1987), each iteration solves for the
@@ -220,11 +227,18 @@ $\chi^2 = N_d$.
   Li (1999), as in section 4.3, with two differences. The magnitude of the
   index is used, since near the transition the two reference models can
   overshoot in opposite directions and make the index negative. The depth of
-  investigation is the shallowest depth from which the rescaled index stays at
-  or above 0.1 over at least a factor of 1.5 in depth: the first crossing
-  alone is fragile (an isolated layer can fluctuate above 0.1), while the
-  depth below which the index never returns under 0.1 is overconfident (a
-  single dip pushes it far down). Plots also shade isolated layers above it. When
+  investigation is the top of the unresolved zone (rescaled index at least
+  0.1) that reaches the bottom of the model, bridging resolved gaps narrower
+  than a factor of 2 in depth. In a sign-off comparison against an
+  independent detectability depth on 192 synthetic soundings (six models,
+  four spreads, eight noise draws), this rule was the least overconfident of
+  the stable candidates: the first crossing of 0.1 is fragile (a single
+  shallow layer can fluctuate above 0.1), and the depth below which the index
+  never returns under 0.1 is overconfident (a dip inside the unresolved zone
+  pushes it down). Plots also shade unresolved layers above it. The two
+  reference inversions aim at the same misfit as the main one; when
+  $\chi^2 = N_d$ cannot be reached, all three aim at 1.1 times the smallest
+  misfit. When
   the index at the bottom is 0.2 or less, VES reports no depth of
   investigation and warns, rather than using ramp reference models.
 
@@ -252,10 +266,9 @@ Every tolerance below is checked in a test and reported in the verification
 report.
 
 1. **Filter accuracy.** On two-layer earths with resistivity contrasts from
-   $10^{-3}$ to $10^{3}$ and $r/h$ from 0.1 to 100, the error in $V$ and in
+   $10^{-4}$ to $10^{4}$ and $r/h$ from 0.1 to 100, the error in $V$ and in
    Schlumberger $\rho_a$ with finite $MN$, against the image series below, is at
-   most $10^{-6}$ relative. The series is summed until $|\kappa|^n < 10^{-14}$,
-   with the contrast capped so that this stays affordable.
+   most $10^{-6}$ relative. The series is summed until $|\kappa|^n < 10^{-14}$.
 2. **Half-space.** Computed without subtraction, so that the filter weights
    are tested: $\rho_a = \rho$ to $10^{-6}$ relative for every array.
 3. **Limits.** $\rho_a$ approaches $\rho_1$ at small spacing and $\rho_N$ at
@@ -263,10 +276,13 @@ report.
    series.
 4. **Jacobian.** Complex-step derivatives against central finite differences,
    relative error below $10^{-6}$.
-5. **Recovery.** Synthetic three- and four-layer models, including a
-   weathered and fractured basement profile typical of Nigeria's basement
-   complex, are recovered with every parameter within 3 standard deviations
-   and a Mahalanobis distance below the 99.7% quantile of $\chi^2_p$.
+5. **Recovery.** Synthetic three- and four-layer models are recovered with
+   every parameter within 3 standard deviations and a Mahalanobis distance
+   below the 99.7% quantile of $\chi^2_p$: a weathered basement profile
+   typical of Nigeria's basement complex (topsoil, clay-rich weathered layer,
+   fresh basement) and a lateritic profile (topsoil, lateritic crust,
+   weathered layer, basement). A fractured basement profile, affected by
+   equivalence, is covered by item 6.
 6. **Honest uncertainty.** For a fixed, well-resolved model (all linearized
    standard deviations of log parameters below 0.2), with the true number of
    layers and 1000 noise draws from the assumed error model: the mean of the
@@ -277,8 +293,11 @@ report.
    model affected by equivalence reports its coverage without a pass or fail
    threshold, to show why the sampler is needed. No coverage claim is made for
    smooth inversions.
-7. **Occam.** The final $\chi^2$ is within $N_d \pm \sqrt{2N_d}$, and raising
-   $\mu$ by 10% takes $\chi^2$ above $N_d$.
+7. **Occam.** The final $\chi^2$ is within 1% of its target, since $\mu$ is
+   found by root finding on $\chi^2(\mu)$, and raising $\mu$ by 10% takes
+   $\chi^2$ above $N_d$. The depth of investigation lies between 0.25 and 1.25
+   times the depth below which a 0.2-decade change of the true model changes
+   $\chi^2$ by less than 9, a reference computed independently of the index.
 8. **Equivalence (0.2).** For a thin conductive layer, the 90% interval of
    $\ln S$ is at most 0.2 times the widths for $\ln h$ and $\ln \rho$, and their
    posterior correlation is at least 0.95; likewise for $T$ on a thin resistive
@@ -417,8 +436,7 @@ is the expected L1 norm, about $N_d \sqrt{2/\pi}$ for Gaussian errors.
 
 - **Depth-of-investigation index** (Oldenburg and Li 1999). Two further
   inversions, with the same weights and the same $\chi^2$ target, use
-  reference models of 0.1 and 10 times the mean resistivity (Marescot et al.
-  2003). Then $R = (m_1 - m_2)/(m_{\mathrm{ref},1} - m_{\mathrm{ref},2})$.
+  reference models of 0.1 and 10 times the mean resistivity. Then $R = (m_1 - m_2)/(m_{\mathrm{ref},1} - m_{\mathrm{ref},2})$.
   When $R$ at the bottom of the region of interest exceeds 0.2, $R$ is rescaled
   to reach 1 there; otherwise ramp reference models are used, as in the paper.
   Cells where the scaled $R$ exceeds 0.1 are masked in plots unless the user
@@ -790,10 +808,6 @@ doi = ert.doi_index(result)  # reuses the result's settings
   refinement of resistivity modeling techniques. *Geophysics*, 54(6), 766–774.
 - Maillet, R. (1947). The fundamental equations of electrical prospecting.
   *Geophysics*, 12(4), 529–556.
-- Marescot, L., Loke, M. H., Chapellier, D., Delaloye, R., Lambiel, C.,
-  Reynard, E. (2003). Assessing reliability of 2D resistivity imaging in
-  mountain permafrost studies using the depth of investigation index method.
-  *Near Surface Geophysics*, 1(2), 57–67.
 - Oldenburg, D. W., Li, Y. (1999). Estimating depth of investigation in DC
   resistivity and IP surveys. *Geophysics*, 64(2), 403–416.
 - Pekeris, C. L. (1940). Direct method of interpretation in resistivity

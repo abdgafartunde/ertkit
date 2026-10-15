@@ -92,11 +92,10 @@ def test_honest_uncertainty(verification: Verification) -> None:
     n_draws, p = 1000, 5
     dof = survey.n_readings - p
     # With this seed the mean chi2 is 2.7 standard errors below N - p, inside
-    # the 3-standard-error band. It is not a bias: 3000 draws with another seed
-    # give 22.97 +/- 0.12 for N - p = 23, and ten independent runs of 1000 draws
-    # give 22.87 +/- 0.07. With seven checks at three standard errors each,
-    # a run with a fresh seed would fail by chance about 1 to 2% of the time,
-    # so the seed is fixed.
+    # the 3-standard-error band. It is not a bias: 40,000 draws give a mean of
+    # 23.04 +/- 0.03 for N - p = 23. With seven checks at three standard errors
+    # each, a run with a fresh seed would fail by chance about 1 to 2% of the
+    # time, so the seed is fixed.
     rng = np.random.default_rng(20261014)
     truth = _log_params(model)
     chi2, inside, mahalanobis, worst_std = [], [], [], 0.0
@@ -161,10 +160,12 @@ def test_static_shift_is_recovered() -> None:
         rhoa=forward(BASEMENT_MODEL, survey) * shift * np.exp(0.03 * eps),
         error=NOISE,
     )
-    with pytest.warns(DataWarning, match="poor fit"):
+    with pytest.warns(DataWarning, match=r"poor fit.*static_shift=True.*too small"):
         invert_few_layer(data, 3, rng=0)
     fit = invert_few_layer(data, 3, static_shift=True, rng=0)
     assert fit.parameter_names[-1] == "shift_2"
+    np.testing.assert_array_equal(fit.segment_mn2, [0.5, 5.0])
+    assert "static shifts: 1 (MN/2 = 0.5 m), 1.1" in fit.summary()
     assert fit.p_value > 0.01
     z = np.log(fit.static_shift[1] / 1.15) / fit.std_log[-1]
     assert abs(z) < 3
@@ -191,7 +192,13 @@ def test_result_contents() -> None:
     np.testing.assert_allclose(fit.covariance, fit.covariance.T)
     np.testing.assert_allclose(fit.factor, np.exp(fit.std_log))
     np.testing.assert_array_equal(fit.static_shift, [1.0])
+    np.testing.assert_array_equal(fit.segment_mn2, [0.5])
     assert fit.predicted.shape == (DESIGN_SURVEY.n_readings,)
+    assert np.sum(fit.residuals**2) == pytest.approx(fit.chi2, rel=1e-10)
+    summary = fit.summary()
+    assert summary.startswith("LayerFit: chi2 = ")
+    assert "half-space" in summary
+    assert "static shifts" not in summary
     assert fit.at_bound == ()
     assert 0.0 < fit.chi2_ratio < 3.0
 
@@ -213,7 +220,12 @@ def test_unresolved_layer_is_flagged() -> None:
     survey = Survey.schlumberger(ab2=np.geomspace(1.0, 300.0, 20), mn2=0.5)
     half_space = LayeredModel(resistivity=[100.0], thickness=[])
     data = Sounding.synthetic(half_space, survey, NOISE, rng=2)
-    with pytest.warns(DataWarning, match="search bounds"):
+    with (
+        pytest.warns(
+            DataWarning, match=r"search bounds.*rho_2 \(lower bound.*longer AB/2"
+        ),
+        pytest.warns(DataWarning, match="poorly determined parameters.*h_1"),
+    ):
         fit = invert_few_layer(data, 2, rng=0)
     assert fit.at_bound
     assert np.isinf(fit.factor).any() or fit.factor.max() > 1e3
@@ -232,6 +244,28 @@ def test_warns_when_no_start_converges(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.warns(ConvergenceWarning, match="did not converge"):
         fit = invert_few_layer(data, 3, n_starts=2, rng=0)
     assert not fit.converged
+
+
+def test_static_shift_needs_two_readings_per_segment() -> None:
+    survey = Survey.wenner(np.geomspace(1.0, 100.0, 20))
+    data = Sounding.synthetic(DESIGN_MODEL, survey, NOISE, rng=0)
+    with pytest.raises(ValueError, match="at least 2 readings in each MN segment"):
+        invert_few_layer(data, 3, static_shift=True)
+
+
+def test_data_must_be_a_sounding() -> None:
+    with pytest.raises(TypeError, match="data must be a Sounding"):
+        invert_few_layer(np.ones(10), 3)  # type: ignore[arg-type]
+
+
+def test_overestimated_errors_warn() -> None:
+    # 1% noise reported as 5%: the fit is far closer than the errors imply.
+    eps = np.random.default_rng(9).standard_normal(DESIGN_SURVEY.n_readings)
+    rhoa = forward(DESIGN_MODEL, DESIGN_SURVEY) * np.exp(0.01 * eps)
+    data = Sounding(survey=DESIGN_SURVEY, rhoa=rhoa, error=ErrorModel(relative=0.05))
+    with pytest.warns(DataWarning, match="errors may be overestimated"):
+        fit = invert_few_layer(data, 3, rng=0)
+    assert fit.p_value > 0.99
 
 
 def test_poor_fit_warns() -> None:
@@ -256,3 +290,16 @@ def test_validation(kwargs: dict[str, object], match: str) -> None:
     data = _noisy(DESIGN_MODEL, DESIGN_SURVEY, EPS_DESIGN)
     with pytest.raises(ValueError, match=match):
         invert_few_layer(data, **kwargs)  # type: ignore[arg-type]
+
+
+@pytest.mark.slow
+@pytest.mark.filterwarnings("ignore:poorly determined parameters:ertkit.DataWarning")
+def test_a_misfit_stalled_on_an_equivalence_ridge_counts_as_converged() -> None:
+    # Five layers for a three-layer earth: the best start crawls along a ridge
+    # of equivalent models, its chi2 changing by less than 1e-3, without
+    # meeting the optimizer's tolerances.
+    survey = Survey.schlumberger(ab2=np.geomspace(1.5, 300.0, 26), mn2=0.5)
+    data = Sounding.synthetic(DESIGN_MODEL, survey, NOISE, rng=0)
+    fit = invert_few_layer(data, 5, rng=0)
+    assert fit.converged
+    assert "ridge of equivalent models" in fit.stop_reason

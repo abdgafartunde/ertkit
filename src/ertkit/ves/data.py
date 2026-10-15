@@ -93,10 +93,12 @@ class Sounding:
             )
         survey = self.survey
         if not np.all(keep):
-            dropped = np.flatnonzero(~keep).tolist()
+            dropped = np.flatnonzero(~keep)
+            spacings = ", ".join(f"{v:.4g}" for v in self.survey.ab2[dropped])
             warnings.warn(
-                f"removed {len(dropped)} reading(s) with R <= 0 or |R| below three "
-                f"times the absolute error: indices {dropped}",
+                f"removed {dropped.size} reading(s) with R <= 0 or |R| below three "
+                f"times the absolute error: indices {dropped.tolist()} "
+                f"(AB/2 = {spacings} m)",
                 DataWarning,
                 stacklevel=3,
             )

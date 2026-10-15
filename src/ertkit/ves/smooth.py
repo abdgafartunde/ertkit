@@ -19,7 +19,7 @@ reached, :math:`\mu` is the largest value with :math:`\chi^2 = N_d`.
 
 The depth of investigation follows Oldenburg and Li (1999): two further
 inversions with reference models of 0.1 and 10 times the geometric mean of the
-apparent resistivities (Marescot et al. 2003) give, layer by layer, the index
+apparent resistivities give, layer by layer, the index
 
 .. math::
 
@@ -30,11 +30,14 @@ which is near 0 where the data control the model and near 1 where the
 reference does. The index is rescaled to 1 at the bottom layer. Near the
 transition the two reference models can overshoot in opposite directions,
 making the index negative there, so its magnitude is used. The depth of
-investigation is the shallowest depth from which the rescaled index stays at
-or above 0.1 over at least a factor of 1.5 in depth. Requiring this
-persistence ignores an isolated layer whose index fluctuates just above the
-threshold, while still placing the depth where resolution is lost rather than
-where the index finally stays high to the bottom of the model.
+investigation is the top of the unresolved zone that reaches the bottom of
+the model: going up from the bottom layer, through layers whose rescaled index
+is at least 0.1, bridging resolved gaps narrower than a factor of 2 in depth.
+Bridging ignores the dips below 0.1 that the overshoot produces inside the
+unresolved zone, while a genuinely resolved deeper zone (for example a
+conductive layer below a resistive one whose resistivity and thickness are
+equivalent) is not swallowed by an unresolved band above it. The reference
+inversions aim at the same misfit as the main inversion.
 """
 
 from __future__ import annotations
@@ -45,13 +48,14 @@ from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy import optimize
+from scipy import optimize, stats
 
 from ertkit._linalg import matmul
 from ertkit._warnings import ConvergenceWarning, DataWarning
 from ertkit.results import InversionResult
 from ertkit.ves.data import Sounding
 from ertkit.ves.forward import _rhoa
+from ertkit.ves.invert import _POOR_FIT_P_VALUE, _segments, _static_shift_hint
 from ertkit.ves.model import LayeredModel
 
 __all__ = ["DOI_THRESHOLD", "SmoothFit", "invert_smooth"]
@@ -60,15 +64,25 @@ _STEP = 1e-30
 DOI_THRESHOLD = 0.1
 """Rescaled depth-of-investigation index at which a layer counts as unresolved
 (Oldenburg and Li 1999)."""
-SMOOTHEST_FITS = "the smoothest model fits better than the target misfit"
-TARGET_REACHED = "target misfit reached and the model is stable"
-TARGET_UNREACHABLE = "the target misfit cannot be reached; the misfit was minimized"
+_SMOOTHEST_FITS = "the smoothest model fits better than the target misfit"
+_TARGET_REACHED = "target misfit reached and the model is stable"
+_TARGET_UNREACHABLE = "the target misfit cannot be reached; the misfit was minimized"
+_TARGET_RELAXED = (
+    "chi2 = N_d cannot be reached; the model fits 1.1 times the smallest misfit"
+)
+_REFIT_FACTOR = 1.1
+"""When chi2 = N_d cannot be reached, the misfit targeted instead, as a multiple
+of the smallest misfit found (a smooth model rather than the oscillating
+misfit-minimizing one)."""
 _ALPHA_S_DOI = 0.1
-"""Smallness weight, relative to roughness, in the two reference inversions."""
+"""Smallness weight, relative to roughness, in the two reference inversions,
+for 30 layers; it is scaled with the layer density (see ``_alpha_s``)."""
 _REFERENCE_FACTORS = (0.1, 10.0)
-DOI_PERSISTENCE = 1.5
-"""Depth factor over which the index must stay above the threshold."""
 """Reference models, as multiples of the geometric mean apparent resistivity."""
+_DOI_GAP_FACTOR = 2.0
+"""Resolved gaps narrower than this factor in depth, inside the unresolved zone
+that reaches the bottom of the model, are bridged when the depth of
+investigation is placed."""
 
 
 @dataclass(frozen=True, eq=False, kw_only=True, slots=True)
@@ -93,12 +107,18 @@ class SmoothFit(InversionResult):
         the depth of investigation was not computed or could not be
         determined.
     doi : float
-        Depth of investigation in meters: the shallowest depth from which the
-        rescaled index stays at or above :data:`DOI_THRESHOLD` over at least a
-        factor of 1.5 in depth. Below it the model reflects the
-        regularization. An isolated shallower layer can also exceed the
-        threshold; plots shade such layers too. ``nan`` if not computed or not
-        determined.
+        Depth of investigation in meters: the top of the unresolved zone that
+        reaches the bottom of the model (rescaled index at least
+        :data:`DOI_THRESHOLD`, bridging resolved gaps narrower than a factor
+        of 2 in depth). Below it the model reflects the regularization. Some
+        shallower layers can also be unresolved (for example inside a thin
+        resistive layer whose thickness and resistivity are equivalent);
+        plots shade them too. ``0.0`` if no layer is resolved, ``nan`` if not
+        computed or not determined.
+
+    See Also
+    --------
+    ertkit.InversionResult : The attributes common to all results.
     """
 
     model: LayeredModel
@@ -106,6 +126,16 @@ class SmoothFit(InversionResult):
     sensitivity: NDArray[np.float64]
     doi_index: NDArray[np.float64]
     doi: float
+
+    def _details(self) -> list[str]:
+        doi = "not computed" if np.isnan(self.doi) else f"{self.doi:.3g} m"
+        return [
+            (
+                f"{self.model.n_layers} layers, the deepest interface at "
+                f"{self.model.depths[-1]:.3g} m; mu = {self.mu:.3g}"
+            ),
+            f"depth of investigation: {doi}",
+        ]
 
 
 def _layer_thicknesses(
@@ -206,6 +236,18 @@ class _Occam:
             lo, hi = grid[max(i - 1, 0)], grid[min(i + 1, grid.size - 1)]
             best = optimize.minimize_scalar(misfit, bounds=(lo, hi), method="bounded")
             log_mu = float(best.x) if best.fun <= values[i] else float(grid[i])
+            if best.fun <= target:
+                # The grid missed a narrow range of mu that reaches the target:
+                # take the largest mu with chi2 = target between the refined
+                # minimum and the next grid point above it.
+                reachable = True
+                above = grid[(grid > log_mu) & (values > target)]
+                if above.size:
+                    log_mu = float(
+                        optimize.brentq(
+                            lambda x: misfit(x) - target, log_mu, above[0], xtol=1e-6
+                        )
+                    )
         else:
             below = np.flatnonzero(values <= target)
             i = int(below.max())
@@ -221,9 +263,9 @@ class _Occam:
         return self.model_for(mu, gram, rhs), mu, reachable, smoothest
 
     def run(
-        self, m0: NDArray[np.float64], max_iter: int
+        self, m0: NDArray[np.float64], max_iter: int, target: float | None = None
     ) -> tuple[NDArray[np.float64], float, bool, str, int]:
-        target = float(self.d.size)
+        target = float(self.d.size) if target is None else float(target)
         m, mu = m0, float("nan")
         current = self.chi2(m)
         for k in range(1, max_iter + 1):
@@ -242,28 +284,43 @@ class _Occam:
                 if not new_chi2 < current or decrease < 1e-3:
                     if new_chi2 < current:
                         m, mu, current = new, new_mu, new_chi2
-                    return m, mu, True, TARGET_UNREACHABLE, k
+                    return m, mu, True, _TARGET_UNREACHABLE, k
             change = float(np.linalg.norm(new - m) / np.sqrt(self.n))
             m, mu, current = new, new_mu, new_chi2
             if change < 1e-3 and smoothest:
-                return m, mu, True, SMOOTHEST_FITS, k
+                return m, mu, True, _SMOOTHEST_FITS, k
             if reachable and abs(current - target) <= 0.01 * target and change < 1e-3:
-                return m, mu, True, TARGET_REACHED, k
+                return m, mu, True, _TARGET_REACHED, k
         return m, mu, False, f"stopped after {max_iter} iterations", max_iter
+
+
+def _alpha_s(n_layers: int) -> float:
+    """Smallness weight for the reference inversions.
+
+    Scaled with the square of the layer density, so that the reference models
+    act over the same depth range whatever the number of layers.
+    """
+    return _ALPHA_S_DOI * (28.0 / max(n_layers - 2, 1)) ** 2
 
 
 def _doi(
     data: Sounding,
     thickness: NDArray[np.float64],
     max_iter: int,
+    target: float,
 ) -> tuple[NDArray[np.float64], float]:
-    """Oldenburg and Li (1999) index and depth of investigation."""
+    """Oldenburg and Li (1999) index and depth of investigation.
+
+    The two reference inversions aim at the same misfit as the main inversion.
+    """
     mean = float(np.exp(np.mean(data.log_data)))
     refs = tuple(np.log(factor * mean) for factor in _REFERENCE_FACTORS)
     models = []
     for ref in refs:
-        problem = _Occam(data, thickness, _ALPHA_S_DOI, ref)
-        m, _, converged, reason, _ = problem.run(np.full(problem.n, ref), max_iter)
+        problem = _Occam(data, thickness, _alpha_s(thickness.size + 1), ref)
+        m, _, converged, reason, _ = problem.run(
+            np.full(problem.n, ref), max_iter, target=target
+        )
         if not converged:
             warnings.warn(
                 f"a reference inversion for the depth of investigation did not "
@@ -283,16 +340,34 @@ def _doi(
         )
         return np.full(index.size, np.nan), float("nan")
     scaled = np.abs(index) / bottom
-    # Layer j spans depths tops[j] to tops[j + 1]. The first layer from which
-    # the index stays above the threshold over a factor DOI_PERSISTENCE in
-    # depth; the bottom layer (index 1) always qualifies.
-    tops = np.concatenate([[0.0], np.cumsum(thickness)])
-    for j in np.flatnonzero(scaled >= DOI_THRESHOLD):
-        reach = DOI_PERSISTENCE * max(tops[j], tops[min(1, tops.size - 1)])
-        window = (tops >= tops[j]) & (tops <= reach)
-        if np.all(scaled[window] >= DOI_THRESHOLD):
-            return scaled, float(tops[j])
-    return scaled, float(tops[-1])  # pragma: no cover - the bottom layer qualifies
+    return scaled, _doi_depth(scaled, np.concatenate([[0.0], np.cumsum(thickness)]))
+
+
+def _doi_depth(scaled: NDArray[np.float64], tops: NDArray[np.float64]) -> float:
+    """Top of the unresolved zone that reaches the bottom of the model.
+
+    Starting from the bottom layer (index 1 by construction), the zone extends
+    upward through layers whose index reaches the threshold, bridging resolved
+    gaps narrower than ``_DOI_GAP_FACTOR`` in depth. A wider resolved gap ends
+    it; unresolved layers above that gap do not set the depth of investigation
+    (plots shade them separately).
+    """
+    unresolved = scaled >= DOI_THRESHOLD
+    if np.all(unresolved):
+        return 0.0
+    j = unresolved.size - 1
+    while j > 0:
+        if unresolved[j - 1]:
+            j -= 1
+            continue
+        k = j - 1  # find the top of the resolved gap above layer j
+        while k >= 0 and not unresolved[k]:
+            k -= 1
+        if k >= 0 and tops[j] < _DOI_GAP_FACTOR * max(tops[k + 1], tops[1]):
+            j = k  # a narrow gap with unresolved layers above it: bridge it
+            continue
+        break
+    return float(tops[j])
 
 
 def invert_smooth(
@@ -327,6 +402,8 @@ def invert_smooth(
 
     Raises
     ------
+    TypeError
+        If ``data`` is not a :class:`Sounding`.
     ValueError
         If ``n_layers`` is less than 2, ``max_iter`` is less than 1, or
         ``depth_range`` is invalid.
@@ -337,17 +414,24 @@ def invert_smooth(
         If the iterations stop before the model is stable, or a reference
         inversion for the depth of investigation does not converge.
     DataWarning
-        If the target misfit cannot be reached (the errors may be
-        underestimated), if even the smoothest model fits better than the
-        target (the errors may be overestimated), or if the depth of
-        investigation cannot be determined (extend ``depth_range``).
+        If even the smallest misfit is improbably large (goodness-of-fit
+        p-value below 0.01: the errors may be underestimated), if even the
+        smoothest model fits better than the target (the errors may be
+        overestimated), or if the depth of investigation cannot be determined
+        (extend ``depth_range``).
 
     Notes
     -----
-    The method is Occam's inversion (Constable et al. 1987). The depth of
-    investigation follows Oldenburg and Li (1999), with reference models of
-    0.1 and 10 times the geometric mean apparent resistivity (Marescot et al.
-    2003); the module documentation gives the details.
+    The method is Occam's inversion (Constable et al. 1987). If no model
+    reaches :math:`\chi^2 = N_d` (which happens for a few percent of soundings
+    even with correct errors), the inversion fits 1.1 times the smallest
+    misfit instead, recorded in ``chi2_target`` and ``stop_reason``, and warns
+    only if that misfit is improbably large.
+
+    The depth of investigation follows Oldenburg and Li (1999), with reference
+    models of 0.1 and 10 times the geometric mean apparent resistivity (a
+    factor of 100 apart) that aim at the same misfit. The module
+    documentation gives the details.
 
     Examples
     --------
@@ -359,6 +443,9 @@ def invert_smooth(
     >>> smooth.model.n_layers, smooth.converged
     (30, True)
     """
+    data_obj: object = data
+    if not isinstance(data_obj, Sounding):
+        raise TypeError(f"data must be a Sounding, got {type(data_obj).__name__}")
     n_layers = operator.index(n_layers)
     max_iter = operator.index(max_iter)
     if n_layers < 2:
@@ -368,34 +455,47 @@ def invert_smooth(
     thickness = _layer_thicknesses(data, n_layers, depth_range)
     start_value = float(np.mean(data.log_data))
     problem = _Occam(data, thickness, alpha_s=0.0, m_ref=start_value)
-    m, mu, converged, reason, n_iter = problem.run(
-        np.full(n_layers, start_value), max_iter
-    )
+    start = np.full(n_layers, start_value)
+    target = float(data.n_data)
+    m, mu, converged, reason, n_iter = problem.run(start, max_iter)
+    if converged and reason == _TARGET_UNREACHABLE:
+        # The misfit-minimizing model oscillates; fit a little less closely.
+        chi2_min = problem.chi2(m)
+        target = _REFIT_FACTOR * chi2_min
+        m, mu, converged, refit_reason, refit_iter = problem.run(
+            start, max_iter, target=target
+        )
+        n_iter += refit_iter
+        reason = _TARGET_RELAXED if converged else refit_reason
+        if stats.chi2.sf(chi2_min, data.n_data) < _POOR_FIT_P_VALUE:
+            n_segments = int(_segments(data.survey.mn2).max()) + 1
+            warnings.warn(
+                f"poor fit: the smallest misfit is chi2 = {chi2_min:.1f} for "
+                f"{data.n_data} data; the data errors may be underestimated, or "
+                f"the earth is not layered{_static_shift_hint(n_segments)}",
+                DataWarning,
+                stacklevel=2,
+            )
     if not converged:
         warnings.warn(f"Occam inversion: {reason}", ConvergenceWarning, stacklevel=2)
-    elif reason == SMOOTHEST_FITS:
+    elif reason == _SMOOTHEST_FITS:
         warnings.warn(
             f"{reason}: the data errors may be overestimated", DataWarning, stacklevel=2
-        )
-    elif reason == TARGET_UNREACHABLE:
-        warnings.warn(
-            f"{reason} (chi2 = {problem.chi2(m):.1f} for {data.n_data} data): "
-            "the data errors may be underestimated, or the earth is not layered",
-            DataWarning,
-            stacklevel=2,
         )
 
     jac = problem.jacobian(m)
     sensitivity = np.linalg.norm(problem.w[:, np.newaxis] * jac, axis=0)
     if depth_of_investigation:
-        doi_index, doi = _doi(data, thickness, max_iter)
+        doi_index, doi = _doi(data, thickness, max_iter, target)
     else:
         doi_index, doi = np.full(n_layers, np.nan), float("nan")
 
+    predicted = problem.predict(m).real
     return SmoothFit(
-        predicted=np.exp(problem.predict(m).real),
+        predicted=np.exp(predicted),
+        residuals=(data.log_data - predicted) / data.log_std,
         chi2=problem.chi2(m),
-        chi2_target=float(data.n_data),
+        chi2_target=target,
         n_data=data.n_data,
         converged=converged,
         stop_reason=reason,

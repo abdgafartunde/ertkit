@@ -47,7 +47,9 @@ where $K$ is the geometric factor ({func}`ertkit.arrays.geometric_factor`).
 For a homogeneous earth $\rho_a$ equals its resistivity. A
 {class}`~ertkit.ves.Survey` stores $AB/2$ and $MN/2$ for every reading, so
 Schlumberger soundings whose $MN$ changes partway, and Wenner soundings, are
-modeled exactly, including the finite length of $MN$.
+modeled exactly, including the finite length of $MN$. In a CSV file read by
+{func}`~ertkit.ves.read_csv`, a Wenner reading with electrode spacing $a$ has
+$AB/2 = 1.5a$ and $MN/2 = 0.5a$.
 
 ## Errors and misfit
 
@@ -59,10 +61,22 @@ s_R = a + b \thinspace |R|,
 $$
 
 with an absolute part $a$ in ohms and a relative part $b$ (LaBrecque et al.
-1996). The default, 3% relative, is a common choice that includes a floor for
-modeling errors: no layered model describes a real site exactly, so field data
-should not be fitted more closely than such errors allow. Error models fitted
-to reciprocal measurements (Tso et al. 2017) can justify other values.
+1996). The relative part is a fraction: 0.03 means 3%. The default, 3%
+relative, is a common choice that includes a floor for modeling errors: no
+layered model describes a real site exactly, so field data should not be
+fitted more closely than such errors allow.
+
+- Values of 2 to 5% suit most soundings; use up to 10% for noisy data or a
+  site that is clearly not layered (near a dike or a steep contact, for
+  example).
+- Reciprocal or repeated readings (Tso et al. 2017) measure the noise but not
+  the modeling error, so they do not justify a value below about 2%.
+- Where two $MN$ segments overlap, the scatter of the overlapping readings
+  about a constant ratio (the static shift) gives a rough estimate of the
+  noise.
+- The absolute part $a$ is about the voltage noise of the instrument divided
+  by the current. It matters at the longest spacings, where $\Delta V$ is
+  small.
 
 The inversions work with $d_i = \ln \rho_{a,i}$, whose standard deviations are
 $s_i = b + a/|R_i|$, and measure the misfit by
@@ -87,16 +101,44 @@ starting from several random models. It returns a
   Depths to the interfaces come with standard deviations in meters.
 - **Goodness of fit.** A model that fits the data to their errors has
   $\chi^2 \approx N_d - p$ for $p$ parameters; the `p_value` measures how
-  unusual the misfit is. Below 0.01, ertkit warns: either the errors are
-  underestimated or the model needs more layers.
-- **Unresolved parameters.** A parameter that ends at the edge of the range
-  the data could possibly resolve is listed in `at_bound`, with a warning.
+  unusual the misfit is. Below 0.01, ertkit warns: the errors are
+  underestimated, or the model needs more layers or static shifts. The
+  uncertainty factors are then too small; the standard deviations, roughly
+  by a factor of $\sqrt{\chi^2/(N_d - p)}$. Above 0.99, ertkit warns that the
+  errors look overestimated, which makes the factors too large. A fit that
+  passes does not prove that the earth is layered: lateral changes can be
+  absorbed by extra layers.
+- **Residuals.** `residuals` holds $(d_i - f_i)/s_i$ for every reading. For a
+  good fit they scatter around 0 with a spread of about 1; a trend with
+  $AB/2$ points to a missing layer, and a step between $MN$ segments to a
+  static shift. `summary()` prints the fit and the model as a table.
+- **Poorly determined parameters.** ertkit warns about every parameter whose
+  uncertainty factor exceeds 10, and about parameters that end at the edge of
+  the range the data could possibly resolve (listed in `at_bound`), saying
+  what each means: for example, a bottom resistivity at its upper bound is
+  only a lower limit, and longer spacings would resolve it. `at_bound` does
+  not catch every unresolved parameter; the uncertainty factors are the main
+  signal.
 - **Static shifts.** With `static_shift=True`, a multiplicative factor for
-  each $MN$ segment after the first is estimated with the model.
+  each $MN$ segment after the first is estimated with the model. The factors
+  are relative to the first segment, and `segment_mn2` gives the $MN/2$ of
+  each segment. Each segment needs at least two readings, so a Wenner
+  sounding, whose $MN$ grows with every reading, has no shifts to estimate.
 
 The linearized uncertainty is honest when the parameters are well resolved:
 over many noise realizations, the one-standard-deviation intervals contain the
 true values about 68% of the time (see the verification report).
+
+### Choosing the number of layers
+
+1. Start with the fewest layers the shape of the curve suggests: an H- or
+   K-type curve (a minimum or a maximum) needs three.
+2. Add a layer only if the fit improves substantially, with the p-value rising
+   above 0.01, and the new parameters are determined (uncertainty factors well
+   below 10). A layer whose parameters are reported as poorly determined, or
+   at their bounds, is not supported by the data.
+3. Compare with the smooth inversion: above its depth of investigation, the
+   layers of the few-layer model should match its main features.
 
 ### Equivalence
 
@@ -106,8 +148,8 @@ through its transverse resistance $T = h\rho$ (Maillet 1947), and a layer
 whose resistivity lies between those of its neighbors can be almost invisible
 (suppression). Different models then fit the data equally well. The fit
 reveals this through large uncertainty factors, but a linearized uncertainty
-can still understate the range of acceptable models. Release 0.2 adds an
-equivalence analysis that samples that range directly. The
+can still understate the range of acceptable models. An equivalence analysis
+that samples that range directly is planned for release 0.2. The
 [equivalence example](../auto_examples/plot_03_equivalence.rst) shows a
 fractured zone in crystalline basement that the data barely constrain.
 
@@ -118,7 +160,10 @@ uses many thin layers whose thicknesses grow with depth and finds the
 smoothest model that fits the data to their errors (Occam's inversion;
 Constable et al. 1987): the regularization weight $\mu$ is the largest with
 $\chi^2 = N_d$. If even the smoothest model fits better than that, ertkit
-reports it and warns that the errors may be overestimated.
+reports it and warns that the errors may be overestimated. If no model reaches
+$\chi^2 = N_d$, which happens for a few percent of soundings even with correct
+errors, the inversion fits 1.1 times the smallest misfit instead (recorded in
+`chi2_target`), and warns only when that misfit is improbably large.
 
 The result, a {class}`~ertkit.ves.SmoothFit`, includes:
 
@@ -129,14 +174,19 @@ The result, a {class}`~ertkit.ves.SmoothFit`, includes:
   of the apparent resistivities. Where the data control the model the two
   agree; where they do not, each follows its reference. The index
   $R^{\mathrm{DOI}} = (m^{(1)} - m^{(2)})/(m_{\mathrm{ref}}^{(1)} - m_{\mathrm{ref}}^{(2)})$
-  (Oldenburg and Li 1999; Marescot et al. 2003) is rescaled to 1 at the
-  bottom. The depth of investigation is the shallowest depth from which the
-  magnitude of the index stays at or above 0.1 (`ertkit.ves.DOI_THRESHOLD`)
-  over at least a factor of 1.5 in depth; below it, the model reflects the
-  regularization, not the data. Plots shade that region, and also any single
-  shallower layer whose index reaches 0.1. If the two reference
-  inversions still agree at the bottom of the model, ertkit warns and reports
-  no depth of investigation; a larger `depth_range` then helps.
+  (Oldenburg and Li 1999) is rescaled to 1 at the bottom. A layer counts as
+  unresolved when the magnitude of its index is at least 0.1
+  (`ertkit.ves.DOI_THRESHOLD`). The depth of investigation is the top of the
+  unresolved zone that reaches the bottom of the model, bridging resolved gaps
+  narrower than a factor of 2 in depth; below it, the model reflects the
+  regularization, not the data. Plots shade that region, and also any
+  unresolved layer above it, such as part of a thin resistive layer whose
+  thickness and resistivity are equivalent. For a single sounding the depth of
+  investigation is typically 0.1 to 0.5 times the largest AB/2: shallower than
+  for a homogeneous earth when a conductive layer channels the current. If the
+  two reference inversions still agree at the bottom of the model, ertkit
+  warns and reports no depth of investigation; a larger `depth_range` then
+  helps.
 
 ## Limitations
 
@@ -148,6 +198,10 @@ The result, a {class}`~ertkit.ves.SmoothFit`, includes:
   can come out too large.
 - Errors in electrode positions bias apparent resistivities (Zhou and Dahlin
   2003).
+- A thick conductive layer (clay, or saline water) channels the current, and
+  a thin layer of high contrast is resolved only through its $S$ or $T$;
+  either can make the depth of investigation much shallower than the spread
+  suggests.
 - A low resistivity can mean water-bearing material, clay, or both. The
   inversion cannot tell these apart; that takes geological knowledge.
 
@@ -171,10 +225,6 @@ The result, a {class}`~ertkit.ves.SmoothFit`, includes:
   *Geophysics*, 61(2), 538–548.
 - Maillet, R. (1947). The fundamental equations of electrical prospecting.
   *Geophysics*, 12(4), 529–556.
-- Marescot, L., Loke, M. H., Chapellier, D., Delaloye, R., Lambiel, C.,
-  Reynard, E. (2003). Assessing reliability of 2D resistivity imaging in
-  mountain permafrost studies using the depth of investigation index method.
-  *Near Surface Geophysics*, 1(2), 57–67.
 - Oldenburg, D. W., Li, Y. (1999). Estimating depth of investigation in DC
   resistivity and IP surveys. *Geophysics*, 64(2), 403–416.
 - Pekeris, C. L. (1940). Direct method of interpretation in resistivity

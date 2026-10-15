@@ -51,11 +51,15 @@ for w in caught:
     print("warning:", w.message)
 
 # %%
+# The shifts are relative to the first segment, whose factor is 1 by
+# definition; ``segment_mn2`` gives the MN/2 of each segment.
+
 shifted = ves.invert_few_layer(data, n_layers=3, static_shift=True, rng=0)
 print(f"with shift: p = {shifted.p_value:.2f}")
 print(
-    f"estimated shift of the second segment: {shifted.static_shift[1]:.3f} "
-    f"(x/ {shifted.factor[-1]:.3f}); simulated shift {shift.max():.2f}"
+    f"estimated shift of the segment with MN/2 = {shifted.segment_mn2[1]:g} m: "
+    f"{shifted.static_shift[1]:.3f} (x/ {shifted.factor[-1]:.3f}); "
+    f"simulated shift {shift.max():.2f}"
 )
 
 # %%

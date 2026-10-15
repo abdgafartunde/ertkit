@@ -94,7 +94,10 @@ def resistivity_transform(
         )
     out = np.broadcast_to(rho[-1], lam.shape).astype(np.result_type(lam, rho, h, 1.0))
     for i in range(rho.size - 2, -1, -1):
-        t = _tanh(lam * h[i])
+        # A thickness with no imaginary part (all but the perturbed one, in a
+        # complex-step derivative) takes the much faster real tanh.
+        h_i = h[i].real if np.iscomplexobj(h) and h[i].imag == 0 else h[i]
+        t = _tanh(lam * h_i)
         out = (out + rho[i] * t) / (1.0 + out * t / rho[i])
     return out
 

@@ -9,6 +9,7 @@ page comes from tests run for that build.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +21,7 @@ _COLUMNS = (
     ("Check", 30),
     ("Measured", 10),
     ("Tolerance", 10),
-    ("Result", 7),
+    ("Result", 8),
     ("Why this tolerance", 43),
 )
 
@@ -55,11 +56,16 @@ class VerificationReport(Directive):
             ]
         data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
         checks = data["checks"]
-        passed = sum(1 for c in checks if c["passed"])
+        # A check with an infinite tolerance reports a value without a threshold.
+        tested = [c for c in checks if math.isfinite(c["tolerance"])]
+        passed = sum(1 for c in tested if c["passed"])
+        reported = len(checks) - len(tested)
+        also = f"; {reported} more reported without a threshold" if reported else ""
         summary = nodes.paragraph(
             text=(
-                f"{passed} of {len(checks)} checks pass, for ertkit {data['ertkit']} "
-                f"with Python {data['python']} and numpy {data['numpy']}."
+                f"{passed} of {len(tested)} checks pass{also}, for ertkit "
+                f"{data['ertkit']} with Python {data['python']} and numpy "
+                f"{data['numpy']}."
             )
         )
         table = nodes.table()
@@ -72,12 +78,17 @@ class VerificationReport(Directive):
         group += head
         body = nodes.tbody()
         for c in checks:
+            if not math.isfinite(c["tolerance"]):
+                tolerance, result = "none", "reported"
+            else:
+                tolerance = f"{c['tolerance']:.3g}"
+                result = "pass" if c["passed"] else "FAIL"
             body += _row(
                 [
                     c["name"],
                     f"{c['measured']:.3g}",
-                    f"{c['tolerance']:.3g}",
-                    "pass" if c["passed"] else "FAIL",
+                    tolerance,
+                    result,
                     c["justification"],
                 ]
             )

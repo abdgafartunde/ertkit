@@ -27,8 +27,12 @@ def read_csv(
     case sensitive. Required columns are ``ab2`` and ``mn2`` (half-spacings in
     meters) and either ``rhoa`` (apparent resistivity in ohm meters) or
     ``resistance`` (transfer resistance in ohms). Lines starting with ``#``
-    are comments, and other columns are ignored. Columns may be separated by
+    are comments, empty rows (such as the ``,,`` rows spreadsheets leave) are
+    skipped, and other columns are ignored. Columns may be separated by
     commas, semicolons or tabs; numbers must use a decimal point.
+
+    For a Wenner sounding with spacing :math:`a`, write ``ab2`` as
+    :math:`1.5a` and ``mn2`` as :math:`0.5a`.
 
     Parameters
     ----------
@@ -49,10 +53,11 @@ def read_csv(
     Raises
     ------
     ValueError
-        If the header is missing or has duplicate or missing columns, if a
-        value is not a number (the message gives the line), or if the
-        spacings are invalid (``MN/2`` must be smaller than ``AB/2``) or no
-        reading is usable.
+        If the file cannot be decoded (try another ``encoding``), if the header
+        is missing or has duplicate or missing columns, if there are no
+        readings, if a value is not a number or a spacing is invalid
+        (``MN/2`` must be positive and smaller than ``AB/2``; the message gives
+        the line), or if no reading is usable.
 
     Warns
     -----
@@ -70,19 +75,32 @@ def read_csv(
 
     is read with ``read_csv("site12.csv")``.
     """
-    with Path(path).open(encoding=encoding, newline="") as handle:
-        numbered = [
-            (number, line.lstrip("\ufeff"))
-            for number, line in enumerate(handle, start=1)
-            if line.strip() and not line.lstrip("\ufeff").lstrip().startswith("#")
-        ]
+    try:
+        with Path(path).open(encoding=encoding, newline="") as handle:
+            numbered = [
+                (number, line.lstrip("\ufeff"))
+                for number, line in enumerate(handle, start=1)
+                if line.strip() and not line.lstrip("\ufeff").lstrip().startswith("#")
+            ]
+    except UnicodeDecodeError as exc:
+        raise ValueError(
+            f"{path}: not readable as {encoding} ({exc.reason}); pass the file's "
+            "encoding, for example read_csv(path, encoding='latin-1')"
+        ) from exc
     if not numbered:
         raise ValueError(f"{path}: no header row")
     try:
         delimiter = csv.Sniffer().sniff(numbered[0][1], delimiters=",;\t").delimiter
     except csv.Error:
         delimiter = ","
-    rows = list(csv.reader([line for _, line in numbered], delimiter=delimiter))
+    parsed = csv.reader([line for _, line in numbered], delimiter=delimiter)
+    lines, rows = [], []
+    for (number, _), row in zip(numbered, parsed, strict=True):
+        if any(cell.strip() for cell in row):
+            lines.append(number)
+            rows.append(row)
+    if not rows:
+        raise ValueError(f"{path}: no header row")
     header = [name.strip().lower() for name in rows[0]]
     duplicated = sorted({name for name in header if name and header.count(name) > 1})
     if duplicated:
@@ -100,8 +118,10 @@ def read_csv(
     else:
         raise ValueError(f"{path}: need a 'rhoa' or a 'resistance' column")
     columns = (names["ab2"], names["mn2"], value_col)
+    if len(rows) < 2:
+        raise ValueError(f"{path}: no readings below the header")
     ab2, mn2, values = [], [], []
-    for (number, _), row in zip(numbered[1:], rows[1:], strict=True):
+    for number, row in zip(lines[1:], rows[1:], strict=True):
         if len(row) <= max(columns):
             raise ValueError(f"{path}, line {number}: too few columns")
         try:
@@ -115,6 +135,11 @@ def read_csv(
             raise ValueError(f"{path}, line {number}: {exc}{hint}") from exc
         if not all(np.isfinite([a, m, v])):
             raise ValueError(f"{path}, line {number}: values must be finite")
+        if not 0 < m < a:
+            raise ValueError(
+                f"{path}, line {number}: need 0 < MN/2 < AB/2, got AB/2 = {a:g} "
+                f"and MN/2 = {m:g}"
+            )
         ab2.append(a)
         mn2.append(m)
         values.append(v)

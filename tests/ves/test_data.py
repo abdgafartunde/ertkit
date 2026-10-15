@@ -51,7 +51,9 @@ class TestSounding:
     def test_unusable_readings_are_removed_with_a_warning(self) -> None:
         rhoa = forward(MODEL, SURVEY).copy()
         rhoa[[3, 10]] = [-5.0, 0.0]
-        with pytest.warns(DataWarning, match=r"indices \[3, 10\]"):
+        with pytest.warns(
+            DataWarning, match=r"indices \[3, 10\] \(AB/2 = 4.487, 17.57 m\)"
+        ):
             data = Sounding(survey=SURVEY, rhoa=rhoa)
         assert data.n_data == SURVEY.n_readings - 2
         assert not np.isin(SURVEY.ab2[[3, 10]], data.survey.ab2).any()
@@ -108,6 +110,11 @@ class TestCsv:
         path.write_bytes("\ufeff# exported\nab2;mn2;rhoa\n3.0;0.5;100.0\n".encode())
         assert read_csv(path).rhoa[0] == 100.0
 
+    def test_empty_spreadsheet_rows_are_skipped(self, tmp_path: Path) -> None:
+        path = tmp_path / "excel.csv"
+        path.write_text("ab2,mn2,rhoa\n3.0,0.5,100.0\n,,\n10.0,0.5,80.0\n,,\n")
+        np.testing.assert_array_equal(read_csv(path).rhoa, [100.0, 80.0])
+
     def test_other_encodings(self, tmp_path: Path) -> None:
         path = tmp_path / "latin1.csv"
         path.write_bytes(
@@ -115,7 +122,7 @@ class TestCsv:
                 "latin-1"
             )
         )
-        with pytest.raises(UnicodeDecodeError):
+        with pytest.raises(ValueError, match="encoding='latin-1'"):
             read_csv(path)
         assert read_csv(path, encoding="latin-1").rhoa[0] == 100.0
 
@@ -130,6 +137,8 @@ class TestCsv:
             ("ab2;mn2;rhoa\n3,0;0,5;100\n", "decimal point"),
             ("ab2,AB2,mn2,rhoa\n3,3,0.5,100\n", "duplicate columns"),
             ("ab2,mn2,rhoa\n3,0.5,nan\n", "line 2: values must be finite"),
+            ("ab2,mn2,rhoa\n", "no readings"),
+            ("ab2,mn2,rhoa\n3,0.5,100\n# c\n2,2,100\n", "line 4: need 0 < MN/2 < AB/2"),
         ],
     )
     def test_errors(self, tmp_path: Path, text: str, match: str) -> None:

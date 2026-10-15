@@ -19,6 +19,9 @@ if TYPE_CHECKING:
 
 __all__ = ["layered_model", "sounding"]
 
+_MAX_FACTOR = 100.0
+"""Resistivity error bars are drawn to at most this factor either side."""
+
 
 def _axes(ax: Axes | None) -> Axes:
     if ax is not None:
@@ -36,6 +39,10 @@ def sounding(
     ax: Axes | None = None,
 ) -> Axes:
     """Plot apparent resistivity against AB/2, with the data errors and fitted curves.
+
+    Fitted curves are drawn separately for each MN segment (readings with the
+    same MN/2), so that static shifts between segments show as steps. When
+    MN changes with every reading, as in a Wenner sounding, one curve is drawn.
 
     Parameters
     ----------
@@ -60,6 +67,8 @@ def sounding(
         [f"fit {i + 1}" for i in range(len(fits))] if labels is None else list(labels)
     )
     segment = _segments(data.survey.mn2)
+    if np.bincount(segment).max() < 2:
+        segment = np.zeros_like(segment)
     for fit, label in zip(fits, labels, strict=True):
         color = None
         for k in np.unique(segment):
@@ -120,9 +129,11 @@ def layered_model(
     """Plot layered models as resistivity against depth.
 
     Few-layer fits show one standard deviation of each layer's resistivity
-    and of each interface depth. Smooth fits shade the region below their
-    depth of investigation, where the model reflects the regularization rather
-    than the data.
+    and of each interface depth; error bars are cut at the edges of the plot,
+    and resistivity error bars at a factor of 100 (``LayerFit.factor`` gives
+    the values). Smooth fits shade the region below their depth of
+    investigation, where the model reflects the regularization rather than the
+    data.
 
     Parameters
     ----------
@@ -163,7 +174,7 @@ def layered_model(
             tops = np.concatenate([[depth_min], model.depths])
             bottoms = np.concatenate([model.depths, [depth_max]])
             mid = np.sqrt(tops * bottoms) if log_depth else 0.5 * (tops + bottoms)
-            factor = item.factor[:n]
+            factor = np.minimum(item.factor[:n], _MAX_FACTOR)
             ax.errorbar(
                 model.resistivity,
                 mid,
@@ -179,8 +190,11 @@ def layered_model(
                 ax.errorbar(
                     np.sqrt(model.resistivity[:-1] * model.resistivity[1:]),
                     model.depths,
-                    # Error bars stop at the surface.
-                    yerr=[np.minimum(item.depth_std, model.depths), item.depth_std],
+                    # Error bars stop at the edges of the plot.
+                    yerr=[
+                        np.minimum(item.depth_std, model.depths - depth_min).clip(0),
+                        np.minimum(item.depth_std, depth_max - model.depths).clip(0),
+                    ],
                     fmt="none",
                     color=line.get_color(),
                     capsize=3,

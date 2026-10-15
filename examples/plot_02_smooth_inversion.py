@@ -64,6 +64,12 @@ ax.set_ylabel("depth (m)")
 ax.legend()
 
 # %%
+# The depth of investigation is about a quarter of the largest AB/2. For a
+# homogeneous earth, half of the Schlumberger signal comes from above about
+# 0.38 AB/2 (the median depth of investigation; Edwards 1977); here the
+# conductive weathered layer channels the current and the basement below it is
+# seen less deeply.
+#
 # A longer spread looks deeper:
 
 for ab2_max in (50.0, 150.0, 500.0):

@@ -12,7 +12,7 @@ import pytest
 from scipy import stats
 from verification_report import Verification
 
-from ertkit import ErrorModel
+from ertkit import DataWarning, ErrorModel
 from ertkit.ves import LayeredModel, Sounding, Survey, forward, invert_few_layer
 from ertkit.ves import invert as invert_module
 from ertkit.ves.invert import _linearized_covariance, _Problem, _segments
@@ -68,7 +68,9 @@ def test_the_start_with_the_smallest_misfit_is_returned(
         return result
 
     monkeypatch.setattr(invert_module.optimize, "least_squares", spy)
-    fit = invert_few_layer(data, 4, rng=3)
+    # The 4-layer fit finds an equivalent thin resistive second layer.
+    with pytest.warns(DataWarning, match="poorly determined parameters.*rho_2"):
+        fit = invert_few_layer(data, 4, rng=3)
     assert fit.chi2 == pytest.approx(2 * min(costs), rel=1e-12)
     assert fit.converged
     assert fit.p_value > 0.01
@@ -86,7 +88,8 @@ def test_unresolved_parameters_have_infinite_or_huge_uncertainty() -> None:
         resistivity=[150.0, 40.0, 400.0, 3000.0], thickness=[2.0, 15.0, 25.0]
     )
     survey = Survey.schlumberger(ab2=np.geomspace(1.5, 500.0, 30), mn2=0.5)
-    fit = invert_few_layer(_data(model, survey, EPS_FRACTURED), 4, rng=0)
+    with pytest.warns(DataWarning, match="poorly determined parameters.*h_2"):
+        fit = invert_few_layer(_data(model, survey, EPS_FRACTURED), 4, rng=0)
     factor = dict(zip(fit.parameter_names, fit.factor, strict=True))
     assert np.isinf(factor["rho_1"])
     assert factor["h_2"] > 10.0
@@ -164,9 +167,9 @@ def test_jacobian_of_the_log_parameters() -> None:
 
 @pytest.mark.verification
 def test_recovery_of_a_four_layer_model(verification: Verification) -> None:
-    # A KH-type profile that the survey resolves (all linearized standard
-    # deviations of the log parameters are small): topsoil, a resistive
-    # layer, a conductive weathered zone and fresh basement.
+    # A KH-type lateritic profile that the survey resolves (all linearized
+    # standard deviations of the log parameters are small): topsoil, a
+    # resistive lateritic crust, a conductive weathered zone and fresh basement.
     model = LayeredModel(
         resistivity=[100.0, 600.0, 25.0, 3000.0], thickness=[1.5, 4.0, 15.0]
     )
@@ -180,13 +183,13 @@ def test_recovery_of_a_four_layer_model(verification: Verification) -> None:
         np.concatenate([fit.model.resistivity, fit.model.thickness])
     ) - np.log(np.concatenate([model.resistivity, model.thickness]))
     verification.check(
-        "four-layer KH model: largest parameter error in standard deviations",
+        "four-layer lateritic profile (KH): largest parameter error in standard deviations",
         float(np.max(np.abs(error / fit.std_log))),
         3.0,
         "each log parameter should lie within 3 linearized standard deviations",
     )
     verification.check(
-        "four-layer KH model: Mahalanobis distance of the estimate from the truth",
+        "four-layer lateritic profile (KH): Mahalanobis distance of the estimate from the truth",
         float(error @ np.linalg.solve(fit.covariance, error)),
         float(stats.chi2.ppf(0.997, error.size)),
         f"the 99.7% quantile of chi-squared with {error.size} degrees of freedom",
