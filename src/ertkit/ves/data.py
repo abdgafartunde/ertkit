@@ -121,7 +121,9 @@ class Sounding:
         Noise is drawn from the error model in log space:
         :math:`\ln \rho_a^{\mathrm{obs}} = \ln \rho_a + s \, \varepsilon`, with
         :math:`\varepsilon \sim N(0, 1)` and :math:`s` evaluated at the
-        noise-free data.
+        noise-free data. Unusable noise-free readings are removed before
+        drawing noise, so a signal below the noise floor cannot be amplified
+        into a usable reading. Noisy readings are screened again afterwards.
 
         Parameters
         ----------
@@ -138,13 +140,23 @@ class Sounding:
         Returns
         -------
         Sounding
+
+        Raises
+        ------
+        ValueError
+            If no noise-free or noisy reading is usable.
+
+        Warns
+        -----
+        DataWarning
+            If noise-free or noisy readings are removed.
         """
         error = ErrorModel() if error is None else error
         generator = np.random.default_rng(rng)
-        clean = forward(model, survey)
-        s = error.log_std(clean / survey.geometric_factor)
-        noisy = clean * np.exp(s * generator.standard_normal(clean.size))
-        return cls(survey=survey, rhoa=noisy, error=error)
+        clean = cls(survey=survey, rhoa=forward(model, survey), error=error)
+        s = error.log_std(clean.resistance)
+        noisy = clean.rhoa * np.exp(s * generator.standard_normal(clean.n_data))
+        return cls(survey=clean.survey, rhoa=noisy, error=error)
 
     @property
     def n_data(self) -> int:

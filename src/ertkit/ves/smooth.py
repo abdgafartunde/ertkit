@@ -385,7 +385,9 @@ def invert_smooth(
     data : Sounding
         The data and their error model.
     n_layers : int, optional
-        Number of layers, including the bottom half-space. Default 30.
+        Number of layers, including the bottom half-space. At least 3, so
+        that distinct first and last interfaces span ``depth_range``.
+        Default 30. Use :func:`~ertkit.ves.invert_few_layer` for a two-layer fit.
     depth_range : (float, float), optional
         Depths in meters of the first and last layer interfaces, which are
         spaced logarithmically. Default: 0.3 times the smallest and 3 times
@@ -405,7 +407,7 @@ def invert_smooth(
     TypeError
         If ``data`` is not a :class:`Sounding`.
     ValueError
-        If ``n_layers`` is less than 2, ``max_iter`` is less than 1, or
+        If ``n_layers`` is less than 3, ``max_iter`` is less than 1, or
         ``depth_range`` is invalid.
 
     Warns
@@ -424,9 +426,11 @@ def invert_smooth(
     -----
     The method is Occam's inversion (Constable et al. 1987). If no model
     reaches :math:`\chi^2 = N_d` (which happens for a few percent of soundings
-    even with correct errors), the inversion fits 1.1 times the smallest
-    misfit instead, recorded in ``chi2_target`` and ``stop_reason``, and warns
-    only if that misfit is improbably large.
+    even with correct errors), the inversion targets 1.1 times the smallest
+    misfit instead, recorded in ``chi2_target``. The ``stop_reason`` says
+    whether this relaxed target was reached, the smoothest model already fits
+    better, or the target remains unreachable. A poor-fit warning is issued
+    only if the smallest misfit is improbably large.
 
     The depth of investigation follows Oldenburg and Li (1999), with reference
     models of 0.1 and 10 times the geometric mean apparent resistivity (a
@@ -448,8 +452,11 @@ def invert_smooth(
         raise TypeError(f"data must be a Sounding, got {type(data_obj).__name__}")
     n_layers = operator.index(n_layers)
     max_iter = operator.index(max_iter)
-    if n_layers < 2:
-        raise ValueError("a smooth model needs at least 2 layers")
+    if n_layers < 3:
+        raise ValueError(
+            "a smooth model needs at least 3 layers to span depth_range; "
+            "use invert_few_layer for a two-layer fit"
+        )
     if max_iter < 1:
         raise ValueError("max_iter must be at least 1")
     thickness = _layer_thicknesses(data, n_layers, depth_range)
@@ -466,7 +473,11 @@ def invert_smooth(
             start, max_iter, target=target
         )
         n_iter += refit_iter
-        reason = _TARGET_RELAXED if converged else refit_reason
+        reason = (
+            _TARGET_RELAXED
+            if converged and refit_reason == _TARGET_REACHED
+            else f"chi2 = N_d cannot be reached; relaxed target: {refit_reason}"
+        )
         if stats.chi2.sf(chi2_min, data.n_data) < _POOR_FIT_P_VALUE:
             n_segments = int(_segments(data.survey.mn2).max()) + 1
             warnings.warn(

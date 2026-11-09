@@ -267,6 +267,23 @@ def test_unreachable_target_with_correct_errors_is_not_a_poor_fit() -> None:
     assert np.isfinite(result.doi)
 
 
+def test_relaxed_target_preserves_the_smoothest_model_stop_reason() -> None:
+    # This coarse grid cannot fit the three-layer earth. After relaxation,
+    # even the smoothest model lies below the new target; it has converged,
+    # but must not claim to have matched that target.
+    survey = Survey.schlumberger(ab2=np.geomspace(2.5, 200.0, 22), mn2=0.5)
+    data = Sounding.synthetic(README_MODEL, survey, NOISE, rng=0)
+    with pytest.warns(DataWarning, match="poor fit"):
+        result = invert_smooth(data, n_layers=3, depth_of_investigation=False)
+    assert result.converged
+    assert result.chi2 < 0.99 * result.chi2_target
+    assert "relaxed target" in result.stop_reason
+    assert (
+        "the smoothest model fits better than the target misfit" in result.stop_reason
+    )
+    assert result.stop_reason != _TARGET_RELAXED
+
+
 @pytest.mark.filterwarnings("ignore:poor fit:ertkit.DataWarning")
 def test_extreme_data_do_not_overflow() -> None:
     # A contrast of 1e4 with 20% noise reported as 0.5%, on 80 layers: before
@@ -305,7 +322,10 @@ def test_too_few_iterations_warns() -> None:
 @pytest.mark.parametrize(
     ("kwargs", "match"),
     [
-        ({"n_layers": 1}, "at least 2 layers"),
+        ({"n_layers": 1}, "at least 3 layers"),
+        ({"n_layers": 2}, "at least 3 layers"),
+        ({"n_layers": 2, "depth_range": (1.0, 100.0)}, "at least 3 layers"),
+        ({"n_layers": 2, "depth_range": (1.0, 1000.0)}, "at least 3 layers"),
         ({"max_iter": 0}, "max_iter must be at least 1"),
         ({"depth_range": (5.0, 1.0)}, "0 < top < bottom"),
         ({"depth_range": (0.0, 10.0)}, "0 < top < bottom"),

@@ -87,6 +87,10 @@ $$
 
 A {class}`~ertkit.ves.Sounding` removes readings that cannot be inverted in
 log space ($R \le 0$, or $|R|$ below three times $a$) and warns about them.
+{meth}`~ertkit.ves.Sounding.synthetic` screens the noise-free readings before
+drawing noise, then screens the noisy readings again. A weak signal cannot
+become an accepted reading just because a large log-space noise draw amplified
+it. If no reading is usable, it raises `ValueError`.
 
 ## Few-layer inversion
 
@@ -162,8 +166,16 @@ Constable et al. 1987): the regularization weight $\mu$ is the largest with
 $\chi^2 = N_d$. If even the smoothest model fits better than that, ertkit
 reports it and warns that the errors may be overestimated. If no model reaches
 $\chi^2 = N_d$, which happens for a few percent of soundings even with correct
-errors, the inversion fits 1.1 times the smallest misfit instead (recorded in
-`chi2_target`), and warns only when that misfit is improbably large.
+errors, the inversion targets 1.1 times the smallest misfit instead (recorded
+in `chi2_target`), and warns about a poor fit only when the smallest misfit is
+improbably large. The `stop_reason` distinguishes reaching the relaxed target
+from finding that the smoothest model already fits better, or that the target
+remains unreachable.
+
+The smooth grid requires at least three layers, including the bottom
+half-space, so that its first and last interfaces span `depth_range`. For a
+two-layer fit with an estimated interface depth, use
+{func}`~ertkit.ves.invert_few_layer` with `n_layers=2`.
 
 The result, a {class}`~ertkit.ves.SmoothFit`, includes:
 
