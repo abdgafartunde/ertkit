@@ -26,6 +26,32 @@ class TestSounding:
         b = Sounding.synthetic(MODEL, SURVEY, rng=np.random.default_rng(7))
         np.testing.assert_array_equal(a.rhoa, b.rhoa)
 
+    def test_synthetic_screens_weak_signals_before_drawing_noise(self) -> None:
+        # Long spacings have negligible transfer resistance. Log-space noise
+        # must not amplify them into apparently usable, enormous readings.
+        model = LayeredModel(resistivity=[100.0], thickness=[])
+        survey = Survey.schlumberger(ab2=np.geomspace(2.5, 1e6, 30), mn2=0.5)
+        error = ErrorModel(relative=0.03, absolute=1e-4)
+        clean = forward(model, survey)
+        usable = error.usable(clean / survey.geometric_factor)
+        assert usable.any()
+        assert not usable.all()
+        with pytest.warns(DataWarning, match="removed"):
+            data = Sounding.synthetic(model, survey, error, rng=0)
+        assert np.isin(data.survey.ab2, survey.ab2[usable]).all()
+        assert np.all(np.isfinite(data.rhoa))
+        # A loose bound for this fixed noise draw around 100 ohm m; the
+        # regression produced enormous outliers (and eventually overflow).
+        assert data.rhoa.max() < 1000.0
+
+    def test_synthetic_rejects_a_survey_entirely_below_the_noise_floor(self) -> None:
+        model = LayeredModel(resistivity=[100.0], thickness=[])
+        survey = Survey.schlumberger(ab2=[1e4, 1e5], mn2=0.5)
+        with pytest.raises(ValueError, match="no reading is usable"):
+            Sounding.synthetic(
+                model, survey, ErrorModel(relative=0.03, absolute=1e-4), rng=0
+            )
+
     def test_synthetic_noise_has_the_stated_distribution(self) -> None:
         # 2000 soundings of 22 readings: the standardized log residuals should
         # have mean 0 and standard deviation 1. With 44,000 draws the standard

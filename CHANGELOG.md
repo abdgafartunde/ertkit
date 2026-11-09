@@ -11,6 +11,17 @@ project uses [semantic versioning](https://semver.org/).
 - The Zenodo DOI in `CITATION.cff`, the README and the documentation, and a
   `Citation` link in the package metadata.
 
+### Fixed
+
+- Synthetic soundings screen noise-free readings before adding log-space
+  noise, preventing signals below the noise floor from becoming enormous
+  accepted readings or overflowing. Noisy readings are screened again.
+- Smooth inversion preserves the stopping reason after relaxing the misfit
+  target, rather than claiming the target was matched when the smoothest
+  model already fits better or the relaxed target remains unreachable.
+- Smooth inversion requires at least three layers to span both endpoints of
+  `depth_range`. Two-layer fitting remains available with `invert_few_layer`.
+
 ## [0.1.0] - 2026-10-15
 
 ### Added
