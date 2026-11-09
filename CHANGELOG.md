@@ -6,6 +6,11 @@ project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- The version 0.1.1 Zenodo DOI in the citation metadata, README and citation
+  guide.
+
 ## [0.1.1] - 2026-11-09
 
 ### Added

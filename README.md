@@ -123,6 +123,9 @@ which always resolves to the latest version. Citation metadata are in
 [CITATION.cff](https://github.com/abdgafartunde/ertkit/blob/main/CITATION.cff);
 please also cite the methods ertkit implements.
 
+For version 0.1.1 specifically, cite
+[10.5281/zenodo.24072527](https://doi.org/10.5281/zenodo.24072527).
+
 ## License
 
 MIT; see [LICENSE](https://github.com/abdgafartunde/ertkit/blob/main/LICENSE).
