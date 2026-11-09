@@ -6,6 +6,8 @@ project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-09
+
 ### Added
 
 - The Zenodo DOI in `CITATION.cff`, the README and the documentation, and a
@@ -21,6 +23,10 @@ project uses [semantic versioning](https://semver.org/).
   model already fits better or the relaxed target remains unreachable.
 - Smooth inversion requires at least three layers to span both endpoints of
   `depth_range`. Two-layer fitting remains available with `invert_few_layer`.
+
+### Changed
+
+- Updated pre-commit hook versions as part of the release checklist.
 
 ## [0.1.0] - 2026-10-15
 
@@ -96,5 +102,6 @@ project uses [semantic versioning](https://semver.org/).
   recorded in a verification report (`pytest -m verification
   --verification-report=PATH`).
 
-[Unreleased]: https://github.com/abdgafartunde/ertkit/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/abdgafartunde/ertkit/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/abdgafartunde/ertkit/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/abdgafartunde/ertkit/releases/tag/v0.1.0
