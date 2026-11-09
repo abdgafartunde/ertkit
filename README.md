@@ -75,10 +75,12 @@ deviation).
 
 ## Status
 
-Release 0.1 covers vertical electrical sounding: a layered-earth forward
+Release 0.1.1 covers vertical electrical sounding: a layered-earth forward
 model, few-layer inversion with linearized uncertainty, smooth inversion with
-sensitivity and a depth of investigation, CSV input and plotting. Planned
-releases:
+sensitivity and a depth of investigation, CSV input and plotting. This patch
+screens weak synthetic signals before adding noise, corrects smooth-inversion
+stopping summaries, and requires at least three layers for a smooth grid.
+Two-layer fitting remains available through `invert_few_layer`. Planned releases:
 
 | Release | Content |
 |---|---|
