@@ -15,8 +15,8 @@ identifiers:
     value: 10.5281/zenodo.23385097
     description: "Concept DOI: all versions, resolving to the latest"
   - type: doi
-    value: 10.5281/zenodo.23385098
-    description: "Version 0.1.0"
+    value: 10.5281/zenodo.24072527
+    description: "Version 0.1.1"
 license: MIT
 repository-code: "https://github.com/abdgafartunde/ertkit"
 url: "https://abdgafartunde.github.io/ertkit/"

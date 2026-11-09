@@ -5,6 +5,8 @@ version and a concept DOI that always resolves to the latest version:
 
 - all versions (concept DOI):
   [10.5281/zenodo.23385097](https://doi.org/10.5281/zenodo.23385097)
+- version 0.1.1:
+  [10.5281/zenodo.24072527](https://doi.org/10.5281/zenodo.24072527)
 - version 0.1.0:
   [10.5281/zenodo.23385098](https://doi.org/10.5281/zenodo.23385098)
 
